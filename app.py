@@ -50,6 +50,14 @@ def login():
         return jsonify({"error": "Credenciales inválidas"}), 401
 
     return jsonify({"message": "Login exitoso", "role": user["role"]})
+@app.route('/join', methods=['POST'])
+def join_club():
+    data = request.json
+    username = data.get("username")
+    club = data.get("club")
+
+    # Guardar en JSON, base de datos, etc.
+    return jsonify({"message": f"{username} se unió al club {club}!"}), 200
 
 
 if __name__ == "__main__":
