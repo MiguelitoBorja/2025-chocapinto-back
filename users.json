@@ -1,12 +1,32 @@
 [
-  {
-    "username": "juan",
-    "password": "1234",
-    "role": "admin"
-  },
-  {
-    "username": "maria",
-    "password": "abcd",
-    "role": "user"
-  }
+    {
+        "username": "juan",
+        "password": "1234",
+        "role": "admin"
+    },
+    {
+        "username": "maria",
+        "password": "abcd",
+        "role": "user"
+    },
+    {
+        "username": "pedro",
+        "password": "1234",
+        "role": "admin"
+    },
+    {
+        "username": "messi",
+        "password": "1234",
+        "role": "admin"
+    },
+    {
+        "username": "messi10",
+        "password": "1234",
+        "role": "admin"
+    },
+    {
+        "username": "juan5",
+        "password": "1234",
+        "role": "admin"
+    }
 ]
