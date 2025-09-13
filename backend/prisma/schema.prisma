@@ -1,10 +1,10 @@
-datasource db {
-  provider = "sqlite"  // podés usar postgres o mysql después
-  url      = "file:./dev.db"
-}
-
 generator client {
   provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -12,4 +12,14 @@ model User {
   username String @unique
   password String
   role     String
+
+  clubs    Club[] @relation("ClubMembers")
+}
+
+model Club {
+  id          Int    @id @default(autoincrement())
+  name        String
+  description String
+  id_owner    Int
+  members     User[] @relation("ClubMembers")
 }
