@@ -1,6 +1,3 @@
-
-
-
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const cors = require("cors");
@@ -199,7 +196,31 @@ app.get("/club/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Error al buscar club" });
   }
 });
+
+// --- CIERRA ESTA FUNCIÓN ANTES DE LA SIGUIENTE RUTA ---
 app.post("/club/:id/addBook", async (req, res) => {
+  const clubId = Number(req.params.id);
+  const { title, author } = req.body;
+  console.log("Datos recibidos en /club/:id/addBook:", { clubId, title, author });
+  if (!clubId || !title) {
+    return res.status(400).json({ success: false, message: "Faltan datos obligatorios" });
+  }
+  try {
+    // Crear el libro y asociarlo al club
+    const book = await prisma.book.create({
+      data: {
+        title,
+        author,
+        clubs: { connect: { id: clubId } }
+      }
+    });
+    res.json({ success: true, message: "Libro agregado", book });
+  } catch (error) {
+    console.error("Error al agregar libro:", error);
+    res.status(500).json({ success: false, message: "Error al agregar libro" });
+  }
+}); // <-- CIERRA AQUÍ
+
 // Eliminar libro leído del club (solo owner)
 app.delete("/club/:id/deleteBook/:bookId", async (req, res) => {
   const clubId = Number(req.params.id);
@@ -212,7 +233,7 @@ app.delete("/club/:id/deleteBook/:bookId", async (req, res) => {
     // Buscar el club y verificar owner
     const club = await prisma.club.findUnique({
       where: { id: clubId },
-      include: { readBooks: true, owner: true }
+      include: { readBooks: true }
     });
     if (!club) return res.status(404).json({ success: false, message: "Club no encontrado" });
     const user = await prisma.user.findUnique({ where: { username } });
@@ -239,27 +260,6 @@ app.delete("/club/:id/deleteBook/:bookId", async (req, res) => {
   } catch (error) {
     console.error("Error al eliminar libro:", error);
     res.status(500).json({ success: false, message: "Error al eliminar libro" });
-  }
-});
-  const clubId = Number(req.params.id);
-  const { title, author } = req.body;
-  console.log("Datos recibidos en /club/:id/addBook:", { clubId, title, author });
-  if (!clubId || !title) {
-    return res.status(400).json({ success: false, message: "Faltan datos obligatorios" });
-  }
-  try {
-    // Crear el libro y asociarlo al club
-    const book = await prisma.book.create({
-      data: {
-        title,
-        author,
-        clubs: { connect: { id: clubId } }
-      }
-    });
-    res.json({ success: true, message: "Libro agregado", book });
-  } catch (error) {
-    console.error("Error al agregar libro:", error);
-    res.status(500).json({ success: false, message: "Error al agregar libro" });
   }
 });
 // Obtener todos los libros
