@@ -10,19 +10,19 @@ app.use(express.json());
 
 // Registro
 app.post("/register", async (req, res) => {
-  const { username, password } = req.body;
+  const { username, email, password } = req.body;
 
-  if (!username || !password) {
+  if (!username || !email || !password) {
     return res.status(400).json({ success: false, message: "Faltan datos" });
   }
 
   try {
     const user = await prisma.user.create({
-      data: { username, password, role: "reader" } // rol por defecto
+      data: { username, email, password, role: "reader" }
     });
     res.status(201).json({ success: true, message: "Usuario registrado con éxito", user });
   } catch (error) {
-    if (error.code === "P2002") { // error de unique constraint
+    if (error.code === "P2002") {
       res.status(400).json({ success: false, message: "El usuario ya existe" });
     } else {
       res.status(500).json({ success: false, message: "Error del servidor", error: error.message });
