@@ -428,6 +428,13 @@ app.delete("/club/:id/deleteBook/:bookId", async (req, res) => {
     if (!libroEnClub) {
       return res.status(404).json({ success: false, message: "El libro no pertenece a este club" });
     }
+    // Eliminar los comentarios del libro en ese club
+    await prisma.comment.deleteMany({
+      where: {
+        bookId: bookId,
+        clubId: clubId
+      }
+    });
     // Eliminar la relación libro-club
     await prisma.book.update({
       where: { id: bookId },
@@ -438,7 +445,7 @@ app.delete("/club/:id/deleteBook/:bookId", async (req, res) => {
     if (libro.clubs.length === 0) {
       await prisma.book.delete({ where: { id: bookId } });
     }
-    res.json({ success: true, message: "Libro eliminado del club" });
+    res.json({ success: true, message: "Libro eliminado del club y comentarios borrados" });
   } catch (error) {
     console.error("Error al eliminar libro:", error);
     res.status(500).json({ success: false, message: "Error al eliminar libro" });
