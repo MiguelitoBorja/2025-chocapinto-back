@@ -144,6 +144,17 @@ app.post("/createClub", async (req, res) => {
     res.status(500).json({ success: false, message: "Error del servidor" });
   }
 });
+app.delete("/deleteClub/:id", async (req, res) => {
+  const clubId = Number(req.params.id);
+  if (!clubId) return res.status(400).json({ success: false, message: "ID inválido" });
+  try {
+    await prisma.club.delete({ where: { id: clubId } });
+    res.json({ success: true, message: "Club eliminado" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error del servidor" });
+  }
+});
+
 // Obtener todos los clubes con info de miembros
 app.get("/clubs", async (req, res) => {
   try {
