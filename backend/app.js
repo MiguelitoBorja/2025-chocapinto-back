@@ -282,8 +282,13 @@ app.get("/club/:id", async (req, res) => {
     const club = await prisma.club.findUnique({
       where: { id: clubId },
       include: {
-        readBooks: {
-          include: { categorias: true }
+        clubBooks: {
+          include: { 
+            book: {
+              include: { categorias: true }
+            },
+            addedBy: true
+          }
         },
         solicitudes: {
           include: { user: true }
@@ -292,12 +297,14 @@ app.get("/club/:id", async (req, res) => {
       }
     });
     if (!club) return res.status(404).json({ success: false, message: "Club no encontrado" });
+    
     const solicitudes = club.solicitudes ? club.solicitudes.map(s => ({
       id: s.id,
       username: s.user.username,
       estado: s.estado,
       createdAt: s.createdAt
     })) : [];
+    
     let ownerName = null;
     if (club.owner) {
       ownerName = club.owner.username;
@@ -305,6 +312,7 @@ app.get("/club/:id", async (req, res) => {
       const ownerUser = await prisma.user.findUnique({ where: { id: club.id_owner } });
       ownerName = ownerUser ? ownerUser.username : null;
     }
+    
     res.json({
       success: true,
       club: {
@@ -313,14 +321,17 @@ app.get("/club/:id", async (req, res) => {
         description: club.description,
         id_owner: club.id_owner,
         ownerName,
-        imagen: club.imagen, // <-- Agregado aquí
-        readBooks: club.readBooks.map(book => ({
-          id: book.id,
-          title: book.title,
-          author: book.author,
-          portada: book.portada,
-          id_api: book.id_api,
-          categorias: book.categorias ? book.categorias.map(cat => ({ id: cat.id, nombre: cat.nombre })) : []
+        imagen: club.imagen,
+        readBooks: club.clubBooks.map(clubBook => ({
+          id: clubBook.book.id,
+          title: clubBook.book.title,
+          author: clubBook.book.author,
+          portada: clubBook.book.portada,
+          id_api: clubBook.book.id_api,
+          estado: clubBook.estado,
+          addedAt: clubBook.addedAt,
+          addedBy: clubBook.addedBy.username,
+          categorias: clubBook.book.categorias ? clubBook.book.categorias.map(cat => ({ id: cat.id, nombre: cat.nombre })) : []
         })),
         solicitudes,
         members: club.members ? club.members.map(m => ({ id: m.id, username: m.username })) : []
@@ -328,6 +339,7 @@ app.get("/club/:id", async (req, res) => {
     });
     console.log("Club encontrado:", club);
   } catch (error) {
+    console.error("Error al buscar club:", error);
     res.status(500).json({ success: false, message: "Error al buscar club" });
   }
 });
@@ -335,29 +347,87 @@ app.get("/club/:id", async (req, res) => {
 
 app.post("/club/:id/addBook", async (req, res) => {
   const clubId = Number(req.params.id);
-  const { title, author, id_api, thumbnail, categorias } = req.body;
-  console.log("Datos recibidos en /club/:id/addBook:", { clubId, title, author, id_api, thumbnail, categorias });
-  if (!clubId || !title) {
+  const { title, author, id_api, thumbnail, categorias, username, estado = "por_leer" } = req.body;
+  console.log("Datos recibidos en /club/:id/addBook:", { clubId, title, author, id_api, thumbnail, categorias, username, estado });
+
+  if (!clubId || !title || !username) {
     return res.status(400).json({ success: false, message: "Faltan datos obligatorios" });
   }
+  
   try {
+    // Buscar el usuario que agrega el libro
+    const user = await prisma.user.findUnique({ where: { username } });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Usuario no encontrado" });
+    }
+
     // Conectar categorías existentes (por id)
     let categoriasConnect = [];
     if (Array.isArray(categorias)) {
       categoriasConnect = categorias.map(id => ({ id: Number(id) }));
     }
-    // Crear el libro y asociarlo al club y categorías
-    const book = await prisma.book.create({
-      data: {
-        title,
-        author,
-        id_api: id_api ? Number(id_api) : undefined,
-        portada: thumbnail || undefined,
-        clubs: { connect: { id: clubId } },
-        categorias: { connect: categoriasConnect }
+
+    // Buscar si el libro ya existe
+    let book = await prisma.book.findFirst({
+      where: {
+        title: title,
+        author: author || null
       }
     });
-    res.json({ success: true, message: "Libro agregado", book });
+
+    // Si no existe, crear el libro
+    if (!book) {
+      book = await prisma.book.create({
+        data: {
+          title,
+          author,
+          id_api: id_api ? Number(id_api) : undefined,
+          portada: thumbnail || undefined,
+          categorias: { connect: categoriasConnect }
+        }
+      });
+    } else {
+      // Si existe, actualizar las categorías
+      await prisma.book.update({
+        where: { id: book.id },
+        data: {
+          categorias: { connect: categoriasConnect }
+        }
+      });
+    }
+
+    // Verificar si ya existe la relación ClubBook
+    const existingClubBook = await prisma.clubBook.findUnique({
+      where: {
+        clubId_bookId: {
+          clubId: clubId,
+          bookId: book.id
+        }
+      }
+    });
+
+    if (existingClubBook) {
+      return res.status(400).json({ success: false, message: "El libro ya está en el club" });
+    }
+
+    // Crear la relación ClubBook
+    const clubBook = await prisma.clubBook.create({
+      data: {
+        clubId: clubId,
+        bookId: book.id,
+        estado: estado,
+        addedById: user.id
+      },
+      include: {
+        book: {
+          include: {
+            categorias: true
+          }
+        }
+      }
+    });
+
+    res.json({ success: true, message: "Libro agregado al club", clubBook });
   } catch (error) {
     console.error("Error al agregar libro:", error);
     res.status(500).json({ success: false, message: "Error al agregar libro" });
@@ -415,36 +485,50 @@ app.delete("/club/:id/deleteBook/:bookId", async (req, res) => {
     // Buscar el club y verificar owner
     const club = await prisma.club.findUnique({
       where: { id: clubId },
-      include: { readBooks: true }
+      include: { 
+        clubBooks: {
+          include: { book: true }
+        }
+      }
     });
     if (!club) return res.status(404).json({ success: false, message: "Club no encontrado" });
+    
     const user = await prisma.user.findUnique({ where: { username } });
     if (!user) return res.status(404).json({ success: false, message: "Usuario no encontrado" });
+    
     if (club.id_owner !== user.id) {
       return res.status(403).json({ success: false, message: "No tienes permisos para eliminar libros" });
     }
+    
     // Verificar que el libro esté en el club
-    const libroEnClub = club.readBooks.some(b => b.id === bookId);
-    if (!libroEnClub) {
+    const clubBook = club.clubBooks.find(cb => cb.book.id === bookId);
+    if (!clubBook) {
       return res.status(404).json({ success: false, message: "El libro no pertenece a este club" });
     }
-    // Eliminar los comentarios del libro en ese club
+    
+    // Eliminar los comentarios relacionados con este ClubBook
     await prisma.comment.deleteMany({
+      where: { clubBookId: clubBook.id }
+    });
+    
+    // Eliminar la relación ClubBook
+    await prisma.clubBook.delete({
       where: {
-        bookId: bookId,
-        clubId: clubId
+        clubId_bookId: {
+          clubId: clubId,
+          bookId: bookId
+        }
       }
     });
-    // Eliminar la relación libro-club
-    await prisma.book.update({
-      where: { id: bookId },
-      data: { clubs: { disconnect: { id: clubId } } }
-    });
+    
     // Opcional: eliminar el libro si no está en ningún club
-    const libro = await prisma.book.findUnique({ where: { id: bookId }, include: { clubs: true } });
-    if (libro.clubs.length === 0) {
+    const otherClubBooks = await prisma.clubBook.findMany({
+      where: { bookId: bookId }
+    });
+    if (otherClubBooks.length === 0) {
       await prisma.book.delete({ where: { id: bookId } });
     }
+    
     res.json({ success: true, message: "Libro eliminado del club y comentarios borrados" });
   } catch (error) {
     console.error("Error al eliminar libro:", error);
@@ -569,6 +653,16 @@ app.put("/categorias/:id", async (req, res) => {
   }
 });
 
+//funcion que borra todos los comentarios
+app.delete("/comentarios", async (req, res) => {
+  try {
+    await prisma.comment.deleteMany({});
+    res.json({ success: true, message: "Todos los comentarios han sido eliminados" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error al eliminar comentarios" });
+  }
+});
+
 // Eliminar categoría
 app.delete("/categorias/:id", async (req, res) => {
   const categoriaId = Number(req.params.id);
@@ -610,25 +704,34 @@ app.post("/comentario", async (req, res) => {
     return res.status(400).json({ success: false, message: "Faltan datos" });
   }
   try {
-    // Verificar existencia de usuario, libro y club antes de crear el comentario
+    // Verificar existencia de usuario
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    const book = await prisma.book.findUnique({ where: { id: bookId } });
-    const club = await prisma.club.findUnique({ where: { id: clubId } });
-
-    console.log("Usuario encontrado:", user); // Depuración
-    console.log("Libro encontrado:", book); // Depuración
-    console.log("Club encontrado:", club); // Depuración
-
-    if (!user || !book || !club) {
-      return res.status(404).json({ success: false, message: "Usuario, libro o club no encontrado" });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Usuario no encontrado" });
     }
+
+    // Buscar la relación ClubBook
+    const clubBook = await prisma.clubBook.findUnique({
+      where: {
+        clubId_bookId: {
+          clubId: clubId,
+          bookId: bookId
+        }
+      }
+    });
+
+    if (!clubBook) {
+      return res.status(404).json({ success: false, message: "Libro no encontrado en este club" });
+    }
+
+    console.log("Usuario encontrado:", user);
+    console.log("ClubBook encontrado:", clubBook);
 
     const comentario = await prisma.comment.create({
       data: {
         content: content,
         user: { connect: { id: userId } },
-        book: { connect: { id: bookId } },
-        club: { connect: { id: clubId } }
+        clubBook: { connect: { id: clubBook.id } }
       }
     });
 
@@ -662,12 +765,27 @@ app.get("/comentario/book/:bookId/club/:clubId", async (req, res) => {
     return res.status(400).json({ success: false, message: "ID de libro o club inválido" });
   }
   try {
+    // Buscar la relación ClubBook
+    const clubBook = await prisma.clubBook.findUnique({
+      where: {
+        clubId_bookId: {
+          clubId: clubId,
+          bookId: bookId
+        }
+      }
+    });
+    
+    if (!clubBook) {
+      return res.status(404).json({ success: false, message: "Libro no encontrado en este club" });
+    }
+
     const comentarios = await prisma.comment.findMany({
-      where: { bookId, clubId },
+      where: { clubBookId: clubBook.id },
       include: { user: { select: { username: true } } }
     });
     res.json({ success: true, comentarios });
   } catch (error) {
+    console.error("Error al obtener comentarios:", error);
     res.status(500).json({ success: false, message: "Error al obtener comentarios" });
   }
 });
@@ -716,7 +834,297 @@ app.post("/changePassword", async (req, res) => {
     }
 });
 
-module.exports = app;
+// Cambiar estado de un libro en un club
+app.put("/club/:clubId/book/:bookId/estado", async (req, res) => {
+  const clubId = Number(req.params.clubId);
+  const bookId = Number(req.params.bookId);
+  const { estado, username } = req.body;
+
+  if (!clubId || !bookId || !estado || !username) {
+    return res.status(400).json({ success: false, message: "Faltan datos obligatorios" });
+  }
+
+  // Validar estado
+  const estadosValidos = ["por_leer", "leyendo", "leido"];
+  if (!estadosValidos.includes(estado)) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Estado inválido. Debe ser: por_leer, leyendo, o leido" 
+    });
+  }
+
+  try {
+    // Verificar que el usuario existe
+    const user = await prisma.user.findUnique({ where: { username } });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Usuario no encontrado" });
+    }
+
+    // Verificar que el ClubBook existe
+    const clubBook = await prisma.clubBook.findUnique({
+      where: {
+        clubId_bookId: {
+          clubId: clubId,
+          bookId: bookId
+        }
+      },
+      include: {
+        club: {
+          include: { members: true }
+        }
+      }
+    });
+
+    if (!clubBook) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Libro no encontrado en este club" 
+      });
+    }
+
+    // Verificar que el usuario es miembro del club o el owner
+    const isMember = clubBook.club.members.some(member => member.id === user.id);
+    const isOwner = clubBook.club.id_owner === user.id;
+
+    if (!isMember && !isOwner) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "No tienes permisos para cambiar el estado de este libro" 
+      });
+    }
+
+    // Actualizar el estado
+    const updatedClubBook = await prisma.clubBook.update({
+      where: {
+        clubId_bookId: {
+          clubId: clubId,
+          bookId: bookId
+        }
+      },
+      data: { estado: estado },
+      include: {
+        book: {
+          include: { categorias: true }
+        },
+        addedBy: true
+      }
+    });
+
+    // Registrar en el historial
+    const historialData = {
+      userId: user.id,
+      bookId: bookId,
+      clubId: clubId,
+      estado: estado,
+      fechaCambio: new Date()
+    };
+    
+    // Si cambia a "leyendo", registrar fecha de inicio
+    if (estado === 'leyendo') {
+      historialData.fechaInicio = new Date();
+    }
+    
+    // Si cambia a "leido", registrar fecha de fin
+    if (estado === 'leido') {
+      historialData.fechaFin = new Date();
+      
+      // Buscar si había una entrada "leyendo" previa para mantener fechaInicio
+      const entradaLeyendo = await prisma.readingHistory.findFirst({
+        where: { 
+          userId: user.id, 
+          bookId: bookId, 
+          clubId: clubId, 
+          estado: 'leyendo' 
+        },
+        orderBy: { fechaCambio: 'desc' }
+      });
+      
+      if (entradaLeyendo && entradaLeyendo.fechaInicio) {
+        historialData.fechaInicio = entradaLeyendo.fechaInicio;
+      }
+    }
+    
+    await prisma.readingHistory.create({ data: historialData });
+
+    res.json({ 
+      success: true, 
+      message: `Estado del libro cambiado a ${estado} y registrado en historial`,
+      clubBook: {
+        id: updatedClubBook.book.id,
+        title: updatedClubBook.book.title,
+        author: updatedClubBook.book.author,
+        portada: updatedClubBook.book.portada,
+        id_api: updatedClubBook.book.id_api,
+        estado: updatedClubBook.estado,
+        addedAt: updatedClubBook.addedAt,
+        addedBy: updatedClubBook.addedBy.username,
+        categorias: updatedClubBook.book.categorias ? updatedClubBook.book.categorias.map(cat => ({ id: cat.id, nombre: cat.nombre })) : []
+      }
+    });
+
+  } catch (error) {
+    console.error("Error al cambiar estado del libro:", error);
+    res.status(500).json({ success: false, message: "Error al cambiar estado del libro" });
+  }
+});
+
+// ==================== RUTAS DEL HISTORIAL ====================
+
+// Obtener historial de un club
+app.get("/club/:clubId/reading-history", async (req, res) => {
+  try {
+    const clubId = Number(req.params.clubId);
+    const { estado, desde, hasta, userId } = req.query;
+    
+    // Verificar que el club existe
+    const club = await prisma.club.findUnique({
+      where: { id: clubId }
+    });
+    
+    if (!club) {
+      return res.status(404).json({ success: false, message: "Club no encontrado" });
+    }
+    
+    const whereClause = { clubId };
+    
+    // Aplicar filtros
+    if (estado) whereClause.estado = estado;
+    if (userId) whereClause.userId = Number(userId);
+    if (desde) whereClause.fechaCambio = { gte: new Date(desde) };
+    if (hasta) {
+      whereClause.fechaCambio = { 
+        ...whereClause.fechaCambio, 
+        lte: new Date(hasta) 
+      };
+    }
+    
+    const historial = await prisma.readingHistory.findMany({
+      where: whereClause,
+      include: {
+        book: {
+          include: {
+            categorias: true
+          }
+        },
+        user: { 
+          select: { id: true, username: true } 
+        }
+      },
+      orderBy: { fechaCambio: 'desc' }
+    });
+    
+    res.json({ success: true, historial });
+  } catch (error) {
+    console.error('Error al obtener historial del club:', error);
+    res.status(500).json({ success: false, message: "Error al obtener historial del club" });
+  }
+});
+
+// Obtener estadísticas de lectura del club
+app.get("/club/:clubId/reading-stats", async (req, res) => {
+  try {
+    const clubId = Number(req.params.clubId);
+    const { año, mes } = req.query;
+    
+    // Verificar que el club existe
+    const club = await prisma.club.findUnique({
+      where: { id: clubId }
+    });
+    
+    if (!club) {
+      return res.status(404).json({ success: false, message: "Club no encontrado" });
+    }
+    
+    const whereClause = { clubId };
+    
+    // Filtro por fecha si se especifica
+    if (año) {
+      const startDate = new Date(año, mes ? mes - 1 : 0, 1);
+      const endDate = mes 
+        ? new Date(año, mes, 0) 
+        : new Date(año + 1, 0, 0);
+      whereClause.fechaCambio = { gte: startDate, lte: endDate };
+    }
+    
+    // Obtener todo el historial del club
+    const todosLosCambios = await prisma.readingHistory.findMany({
+      where: whereClause,
+      include: { 
+        book: {
+          include: {
+            categorias: true
+          }
+        },
+        user: { select: { id: true, username: true } }
+      }
+    });
+    
+    // Obtener solo libros leídos
+    const librosLeidos = todosLosCambios.filter(entry => entry.estado === 'leido');
+    
+    // Estadísticas por género
+    const estadisticasPorGenero = {};
+    const estadisticasPorMes = {};
+    const estadisticasPorUsuario = {};
+    
+    librosLeidos.forEach(entry => {
+      // Por género
+      if (entry.book.categorias && entry.book.categorias.length > 0) {
+        entry.book.categorias.forEach(cat => {
+          const nombreGenero = cat.nombre;
+          estadisticasPorGenero[nombreGenero] = (estadisticasPorGenero[nombreGenero] || 0) + 1;
+        });
+      } else {
+        estadisticasPorGenero['Sin categoría'] = (estadisticasPorGenero['Sin categoría'] || 0) + 1;
+      }
+      
+      // Por mes
+      const mes = entry.fechaCambio.toISOString().substring(0, 7); // YYYY-MM
+      estadisticasPorMes[mes] = (estadisticasPorMes[mes] || 0) + 1;
+      
+      // Por usuario
+      const username = entry.user.username;
+      estadisticasPorUsuario[username] = (estadisticasPorUsuario[username] || 0) + 1;
+    });
+    
+    // Calcular usuario más activo
+    const usuarioMasActivo = Object.keys(estadisticasPorUsuario).length > 0 
+      ? Object.keys(estadisticasPorUsuario).reduce((a, b) => 
+          estadisticasPorUsuario[a] > estadisticasPorUsuario[b] ? a : b
+        )
+      : null;
+    
+    // Calcular promedio de tiempo de lectura
+    const tiemposLectura = librosLeidos
+      .filter(h => h.fechaInicio && h.fechaFin)
+      .map(h => {
+        const inicio = new Date(h.fechaInicio);
+        const fin = new Date(h.fechaFin);
+        return Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24));
+      });
+    
+    const promedioLectura = tiemposLectura.length > 0 
+      ? Math.round(tiemposLectura.reduce((a, b) => a + b, 0) / tiemposLectura.length)
+      : 0;
+    
+    res.json({
+      success: true,
+      stats: {
+        totalCambios: todosLosCambios.length,
+        totalLeidos: librosLeidos.length,
+        porGenero: estadisticasPorGenero,
+        porMes: estadisticasPorMes,
+        porUsuario: estadisticasPorUsuario,
+        usuarioMasActivo,
+        promedioLectura,
+        cambiosRecientes: todosLosCambios.slice(0, 20)
+      }
+    });
+  } catch (error) {
+    console.error('Error al obtener estadísticas del club:', error);
+    res.status(500).json({ success: false, message: "Error al obtener estadísticas del club" });
+  }
+});
 
 module.exports = app;
 
