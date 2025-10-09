@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "start": "node backend/server_nuevo.js"
+    "start": "node server_nuevo.js"
   },
   "keywords": [],
   "author": "",
