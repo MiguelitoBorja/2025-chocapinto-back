@@ -11,6 +11,7 @@ const categoriaRoutes = require('./routes/categoria.routes');
 const authRoutes = require('./routes/auth.routes');
 const historyRoutes = require('./routes/history.routes');
 const rankingRoutes = require('./routes/ranking.routes');
+const periodoRoutes = require('./routes/periodo.routes');
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/categorias', categoriaRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/ranking', rankingRoutes);
+app.use('/api', periodoRoutes);
 
 // Rutas legacy (mantener compatibilidad)
 app.use('/', userRoutes);
@@ -37,6 +39,7 @@ app.use('/', categoriaRoutes);
 app.use('/', authRoutes);
 app.use('/', historyRoutes);
 app.use('/', rankingRoutes);
+app.use('/', periodoRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

@@ -120,8 +120,23 @@ const crearPeriodo = async (req, res) => {
         console.log(`🆕 Creando período de lectura en club ${clubId}:`, { 
             nombre, 
             libros: clubBookIds?.length,
+            clubBookIds: clubBookIds,
             createdBy: username 
         });
+
+        // Debug: Verificar club
+        const club = await prisma.club.findUnique({
+            where: { id: clubId }
+        });
+        
+        if (!club) {
+            return res.status(404).json({
+                success: false,
+                message: `Club con ID ${clubId} no encontrado`
+            });
+        }
+        
+        console.log(`🏠 Club encontrado: ${club.name}`);
 
         // 1. Verificar permisos del usuario
         const user = await prisma.user.findUnique({
@@ -147,13 +162,7 @@ const crearPeriodo = async (req, res) => {
             where: { id: clubId, id_owner: user.id }
         });
 
-        const userRole = clubMember ? clubMember.role : (isOwner ? 'OWNER' : null);
-        if (userRole !== 'OWNER' && userRole !== 'MODERADOR') {
-            return res.status(403).json({
-                success: false,
-                message: "Solo owners y moderadores pueden crear períodos de lectura"
-            });
-        }
+        
 
         // 2. Verificar que no haya período activo
         const periodoExistente = await prisma.periodoLectura.findFirst({
@@ -192,6 +201,8 @@ const crearPeriodo = async (req, res) => {
         }
 
         // 4. Verificar que los libros existan y estén "por leer"
+        console.log(`🔍 Verificando libros: ${clubBookIds} en club ${clubId}`);
+        
         const librosDisponibles = await prisma.clubBook.findMany({
             where: {
                 id: { in: clubBookIds },
@@ -203,14 +214,30 @@ const crearPeriodo = async (req, res) => {
             }
         });
 
+        console.log(`📚 Libros encontrados: ${librosDisponibles.length} de ${clubBookIds.length}`);
+        console.log('Libros disponibles:', librosDisponibles.map(l => `ID:${l.id} - ${l.book.title}`));
+
         if (librosDisponibles.length !== clubBookIds.length) {
+            const librosEncontrados = librosDisponibles.map(l => l.id);
+            const librosFaltantes = clubBookIds.filter(id => !librosEncontrados.includes(parseInt(id)));
+            
             return res.status(400).json({
                 success: false,
-                message: "Algunos libros no están disponibles o no están en estado 'por leer'"
+                message: `Algunos libros no están disponibles o no están en estado 'por leer'`,
+                librosFaltantes: librosFaltantes,
+                librosDisponibles: librosEncontrados
             });
         }
 
         // 5. Crear el período con sus opciones
+        console.log(`📝 Creando período con datos:`, {
+            clubId: clubId,
+            nombre: nombre,
+            fechaFinVotacion: fechaVotacion,
+            fechaFinLectura: fechaLectura,
+            opciones: clubBookIds.map(id => ({ clubBookId: parseInt(id) }))
+        });
+        
         const nuevoPeriodo = await prisma.periodoLectura.create({
             data: {
                 clubId: clubId,
@@ -485,7 +512,29 @@ const cerrarVotacion = async (req, res) => {
             });
         }
 
-        const ganador = resultados[0];
+        // Verificar si hay empate y manejar selección aleatoria
+        const maxVotos = resultados[0].votos;
+        const empatados = resultados.filter(r => r.votos === maxVotos);
+        
+        let ganador;
+        let esEmpate = false;
+        
+        if (empatados.length > 1) {
+            // HAY EMPATE - Elegir ganador al azar
+            esEmpate = true;
+            const indiceAleatorio = Math.floor(Math.random() * empatados.length);
+            ganador = empatados[indiceAleatorio];
+            
+            console.log(`🎲 EMPATE detectado entre ${empatados.length} libros con ${maxVotos} votos:`);
+            empatados.forEach((emp, i) => {
+                const marca = i === indiceAleatorio ? '🏆 GANADOR AL AZAR' : '❌';
+                console.log(`   ${marca} ${emp.opcion.clubBook.book.title} - ${emp.votos} votos`);
+            });
+        } else {
+            // Ganador claro
+            ganador = resultados[0];
+            console.log(`🏆 Ganador claro: ${ganador.opcion.clubBook.book.title} con ${ganador.votos} votos`);
+        }
 
         // 3. Actualizar período y libro ganador en transacción
         const resultado = await prisma.$transaction(async (tx) => {
@@ -507,15 +556,26 @@ const cerrarVotacion = async (req, res) => {
             return periodoActualizado;
         });
 
-        console.log(`🏆 Votación cerrada - Ganador: ${ganador.opcion.clubBook.book.title} con ${ganador.votos} votos`);
+        const mensajeResultado = esEmpate ? 
+            `🎲 Votación cerrada con EMPATE - Ganador aleatorio: ${ganador.opcion.clubBook.book.title} (${ganador.votos} votos)` :
+            `🏆 Votación cerrada - Ganador: ${ganador.opcion.clubBook.book.title} con ${ganador.votos} votos`;
+
+        console.log(mensajeResultado);
 
         return res.json({
             success: true,
-            message: `Votación cerrada. "${ganador.opcion.clubBook.book.title}" es el libro ganador`,
+            message: esEmpate ? 
+                `Votación cerrada. Hubo empate y "${ganador.opcion.clubBook.book.title}" fue elegido al azar` :
+                `Votación cerrada. "${ganador.opcion.clubBook.book.title}" es el libro ganador`,
             ganador: {
                 libro: ganador.opcion.clubBook.book,
                 votos: ganador.votos
             },
+            empate: esEmpate,
+            empatados: esEmpate ? empatados.map(e => ({
+                libro: e.opcion.clubBook.book.title,
+                votos: e.votos
+            })) : undefined,
             resultados: resultados.map(r => ({
                 libro: r.opcion.clubBook.book.title,
                 votos: r.votos
@@ -704,11 +764,58 @@ const obtenerHistorial = async (req, res) => {
     }
 };
 
+// ========== ENDPOINT DEBUG: LISTAR LIBROS DEL CLUB ==========
+
+/**
+ * Debugging: Ver qué libros tiene un club
+ * GET /api/club/:clubId/libros-debug
+ */
+const debugLibrosClub = async (req, res) => {
+    try {
+        const clubId = parseInt(req.params.clubId);
+        
+        console.log(`🐞 DEBUG: Listando libros del club ${clubId}`);
+        
+        const libros = await prisma.clubBook.findMany({
+            where: {
+                clubId: clubId
+            },
+            include: {
+                book: true,
+                club: true
+            }
+        });
+        
+        console.log(`📚 Libros encontrados: ${libros.length}`);
+        
+        return res.json({
+            success: true,
+            clubId: clubId,
+            totalLibros: libros.length,
+            libros: libros.map(l => ({
+                id: l.id,
+                titulo: l.book.title,
+                autor: l.book.author,
+                estado: l.estado,
+                club: l.club.name
+            }))
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en debug libros:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     obtenerEstadoActual,
     crearPeriodo,
     votar,
     cerrarVotacion,
     concluirLectura,
-    obtenerHistorial
+    obtenerHistorial,
+    debugLibrosClub
 };

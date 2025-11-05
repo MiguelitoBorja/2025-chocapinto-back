@@ -46,4 +46,11 @@ router.put('/periodo/:periodoId/concluir-lectura', periodoController.concluirLec
  */
 router.get('/club/:clubId/periodos/historial', periodoController.obtenerHistorial);
 
+/**
+ * @route   GET /api/club/:clubId/libros-debug
+ * @desc    Debug: Ver libros disponibles en el club
+ * @access  DEBUG
+ */
+router.get('/club/:clubId/libros-debug', periodoController.debugLibrosClub);
+
 module.exports = router;
