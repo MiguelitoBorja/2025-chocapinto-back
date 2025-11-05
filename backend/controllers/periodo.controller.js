@@ -797,7 +797,8 @@ const debugLibrosClub = async (req, res) => {
                 titulo: l.book.title,
                 autor: l.book.author,
                 estado: l.estado,
-                club: l.club.name
+                club: l.club.name,
+                portada: l.book.portada
             }))
         });
         
