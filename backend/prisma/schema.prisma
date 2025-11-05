@@ -24,6 +24,7 @@ model User {
   comments        Comment[]
   clubBooks       ClubBook[]        @relation("LibrosSubidos") // ← relación inversa a ClubBook.addedBy
   readingHistory  ReadingHistory[]
+  votos           Voto[]            // Votos del usuario en períodos de lectura
 }
 
 model ClubSolicitud {
@@ -48,6 +49,7 @@ model Club {
   clubBooks       ClubBook[]
   readingHistory  ReadingHistory[]
   clubCategories ClubCategoria[] @relation("ClubToClubCategoria")
+  periodosLectura PeriodoLectura[] // Períodos de lectura del club
 }
 
 model Book {
@@ -88,6 +90,10 @@ model ClubBook {
   addedBy     User       @relation("LibrosSubidos", fields: [addedById], references: [id]) // relación con User
   addedById   Int
   comments    Comment[]  // comentarios sobre este libro en el club
+  
+  // Nuevas relaciones para períodos de lectura
+  opcionesVotacion   VotacionOpcion[]
+  periodoGanador     PeriodoLectura?  @relation("LibroGanador")
 
   @@unique([clubId, bookId])
 }
@@ -131,4 +137,74 @@ model ClubCategoria {
   clubs  Club[] @relation("ClubToClubCategoria") // Clubes que tienen esta categoría
 
   @@map("club_categorias")
+}
+
+// ========== NUEVO SISTEMA DE PERÍODOS DE LECTURA ==========
+
+// Modelo para un "Ciclo de Lectura" o "Período"
+model PeriodoLectura {
+  id                 Int      @id @default(autoincrement())
+  club               Club     @relation(fields: [clubId], references: [id])
+  clubId             Int
+  nombre             String   // Ej: "Lectura de Enero 2025"
+  
+  // Estados del período
+  estado             String   // "VOTACION", "LEYENDO", "CERRADO"
+  
+  // Fechas importantes
+  fechaFinVotacion   DateTime // La "cuenta regresiva" de la votación
+  fechaFinLectura    DateTime // La fecha límite del período de lectura
+  
+  // Libro ganador (se asigna cuando termina la votación)
+  libroGanador       ClubBook? @relation("LibroGanador", fields: [libroGanadorId], references: [id])
+  libroGanadorId     Int?      @unique
+  
+  // Opciones de votación para este período
+  opciones           VotacionOpcion[]
+  
+  // Timestamps
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  @@map("periodos_lectura")
+}
+
+// Libros propuestos para votar en un período
+model VotacionOpcion {
+  id        Int      @id @default(autoincrement())
+  
+  // Relación con el período
+  periodo   PeriodoLectura @relation(fields: [periodoId], references: [id], onDelete: Cascade)
+  periodoId Int
+  
+  // Se enlaza al ClubBook que está "por leer"
+  clubBook  ClubBook @relation(fields: [clubBookId], references: [id])
+  clubBookId  Int
+  
+  // Votos recibidos para esta opción
+  votos     Voto[]
+  
+  // Un libro solo puede estar una vez en cada período
+  @@unique([periodoId, clubBookId])
+  @@map("votacion_opciones")
+}
+
+// Registra el voto de un usuario en una opción
+model Voto {
+  id        Int      @id @default(autoincrement())
+  
+  // La opción por la que votó
+  opcion    VotacionOpcion @relation(fields: [opcionId], references: [id], onDelete: Cascade)
+  opcionId  Int
+  
+  // El usuario que votó
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  
+  // Timestamp del voto
+  createdAt DateTime @default(now())
+  
+  // Un usuario solo puede votar una vez por opción
+  @@unique([opcionId, userId])
+  @@map("votos")
 }
