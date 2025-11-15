@@ -25,6 +25,8 @@ model User {
   clubBooks       ClubBook[]        @relation("LibrosSubidos") // ← relación inversa a ClubBook.addedBy
   readingHistory  ReadingHistory[]
   votos           Voto[]            // Votos del usuario en períodos de lectura
+  xp     Int @default(0)
+  level  Int @default(1)
 }
 
 model ClubSolicitud {

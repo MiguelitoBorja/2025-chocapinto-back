@@ -1,6 +1,7 @@
 // src/controllers/book.controller.js
 const prisma = require('../db');
 const { validateRequiredFields } = require('../utils/validateFields');
+const { computeNewXpAndLevel, XP_PER_BOOK_FINISHED } = require('../utils/xpSystem');
 
 const addBookToClub = async (req, res) => {
   try {
@@ -312,42 +313,80 @@ const changeBookStatus = async (req, res) => {
       return res.status(400).json({ success: false, message: "Estado inválido" });
     }
 
-    // Obtener usuario
+    // Obtener usuario que hace el cambio
     const user = await prisma.user.findUnique({ where: { username } });
     if (!user) {
       return res.status(404).json({ success: false, message: "Usuario no encontrado" });
     }
 
-    // Verificar permisos
+    // Verificar que el club exista y que el usuario sea miembro
     const club = await prisma.club.findUnique({
       where: { id: clubId },
-      include: { 
+      include: {
         memberships: {
           include: {
-            user: true
-          }
-        }
-      }
+            user: true,
+          },
+        },
+      },
     });
 
-    const isMember = club.memberships.some(membership => membership.user.id === user.id) || club.id_owner === user.id;
+    if (!club) {
+      return res.status(404).json({ success: false, message: "Club no encontrado" });
+    }
+
+    const isMember =
+      club.memberships.some(membership => membership.user.id === user.id) ||
+      club.id_owner === user.id;
+
     if (!isMember) {
       return res.status(403).json({ success: false, message: "No eres miembro de este club" });
     }
 
-    // Actualizar estado en ClubBook
-    await prisma.clubBook.updateMany({
+    // Obtener estado previo del libro en el club
+    const clubBookActual = await prisma.clubBook.findFirst({
       where: { clubId, bookId },
-      data: { estado }
     });
 
-    // Registrar en historial
+    if (!clubBookActual) {
+      return res.status(404).json({ success: false, message: "Libro no encontrado en este club" });
+    }
+
+    const estabaLeidoAntes = clubBookActual.estado === 'leido';
+
+    // Si pasa a "leido" y antes NO estaba en "leido",
+    // dar XP a todos los miembros del club
+    if (estado === 'leido' && !estabaLeidoAntes) {
+      const miembros = await prisma.clubMember.findMany({
+        where: { clubId },
+        include: { user: true },
+      });
+
+      // Actualizamos XP y nivel de todos en una transacción
+      await prisma.$transaction(
+        miembros.map(miembro => {
+          const { xp, level } = computeNewXpAndLevel(miembro.user, XP_PER_BOOK_FINISHED);
+          return prisma.user.update({
+            where: { id: miembro.userId },
+            data: { xp, level },
+          });
+        })
+      );
+    }
+
+    // Actualizar estado en ClubBook (estado del libro en el club)
+    await prisma.clubBook.updateMany({
+      where: { clubId, bookId },
+      data: { estado },
+    });
+
+    // Registrar en historial para el usuario que dispara el cambio
     const historialData = {
       userId: user.id,
       bookId,
       clubId,
       estado,
-      fechaCambio: new Date()
+      fechaCambio: new Date(),
     };
 
     if (estado === 'leyendo') {
@@ -356,13 +395,13 @@ const changeBookStatus = async (req, res) => {
 
     if (estado === 'leido') {
       historialData.fechaFin = new Date();
-      
-      // Buscar entrada "leyendo" previa
+
+      // Buscar la última entrada "leyendo" de ese usuario/libro/club
       const entradaLeyendo = await prisma.readingHistory.findFirst({
         where: { userId: user.id, bookId, clubId, estado: 'leyendo' },
-        orderBy: { fechaCambio: 'desc' }
+        orderBy: { fechaCambio: 'desc' },
       });
-      
+
       if (entradaLeyendo) {
         historialData.fechaInicio = entradaLeyendo.fechaInicio;
       }
@@ -370,12 +409,13 @@ const changeBookStatus = async (req, res) => {
 
     await prisma.readingHistory.create({ data: historialData });
 
-    res.json({ success: true, message: "Estado actualizado y registrado en historial" });
+    res.json({ success: true, message: "Estado actualizado, historial registrado y XP asignada (si correspondía)" });
   } catch (error) {
     console.error('Error al cambiar estado:', error);
     res.status(500).json({ success: false, message: "Error al actualizar estado" });
   }
 };
+
 
 const searchBooks = async (req, res) => {
   try {
