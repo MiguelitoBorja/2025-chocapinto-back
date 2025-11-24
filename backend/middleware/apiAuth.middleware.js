@@ -29,7 +29,7 @@ const authenticateExternalAPI = (req, res, next) => {
 
     // 3. Verificar origen permitido (opcional)
     const allowedOrigins = [
-  'https://booksy-platform.com',
+  'https://booksy-platform.com', //--> hay q poner la dire del render
   'https://api.external-system.com', 
   'http://localhost:3000',
   'http://localhost:5173',
