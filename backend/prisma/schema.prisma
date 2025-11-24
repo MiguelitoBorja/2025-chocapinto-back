@@ -27,7 +27,21 @@ model User {
   votos           Voto[]            // Votos del usuario en períodos de lectura
   xp     Int @default(0)
   level  Int @default(1)
+  resetTokens PasswordResetToken[]
+
 }
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  token     String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  used      Boolean  @default(false)
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+}
+
 
 model ClubSolicitud {
   id        Int       @id @default(autoincrement())
