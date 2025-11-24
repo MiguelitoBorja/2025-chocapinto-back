@@ -1,7 +1,7 @@
 // src/controllers/book.controller.js
 const prisma = require('../db');
 const { validateRequiredFields } = require('../utils/validateFields');
-const { computeNewXpAndLevel, XP_PER_BOOK_FINISHED } = require('../utils/xpSystem');
+const { computeNewXpAndLevel, XP_PER_BOOK_FINISHED } = require('../utils/XPSystem');
 
 const addBookToClub = async (req, res) => {
   try {
