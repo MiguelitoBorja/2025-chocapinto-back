@@ -18,6 +18,7 @@ model User {
   email           String?           @unique
   password        String
   role            String
+  avatar          String?
   solicitudes     ClubSolicitud[]
   // clubs           Club[]            @relation("ClubMembers")
   memberships    ClubMember[]

@@ -131,10 +131,73 @@ const getMyClubs = async (req, res) => {
         res.status(500).json({ success: false, message: "Error interno del servidor al consultar clubes." });
     }
 };
+const updateAvatarSelection = async (req, res) => {
+    const { userId } = req.params;
+    const { avatarName } = req.body; 
+
+    try {
+        // Validar que el userId sea válido
+        if (!userId || isNaN(parseInt(userId))) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "ID de usuario no válido" 
+            });
+        }
+
+        // Validar que el avatarName sea válido
+        if (!avatarName || typeof avatarName !== 'string') {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Nombre de avatar no válido" 
+            });
+        }
+
+        // Construir la ruta del avatar
+        const avatarPath = `../images/avatars/${avatarName}`;
+
+        // Verificar que el usuario exista antes de actualizar
+        const existingUser = await prisma.user.findUnique({
+            where: { id: parseInt(userId) }
+        });
+
+        if (!existingUser) {
+            return res.status(404).json({ 
+                success: false, 
+                message: "Usuario no encontrado" 
+            });
+        }
+
+        // Actualizar el avatar del usuario
+        const updatedUser = await prisma.user.update({
+            where: { id: parseInt(userId) },
+            data: { avatar: avatarPath },
+            select: { 
+                id: true, 
+                username: true, 
+                avatar: true 
+            }
+        });
+
+        res.json({ 
+            success: true, 
+            message: "Avatar actualizado correctamente",
+            avatar: avatarPath,
+            user: updatedUser 
+        });
+
+    } catch (error) {
+        console.error("Error actualizando avatar:", error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Error del servidor al actualizar el avatar" 
+        });
+    }
+};
 
 module.exports = {
   getUserByIdOrUsername,
   updateUser,
   deleteUser,
-  getMyClubs
+  getMyClubs,
+  updateAvatarSelection
 };
