@@ -220,7 +220,8 @@ const getClubById = async (req, res) => {
           id: membership.user.id, 
           username: membership.user.username,
           role: membership.role,
-          level: membership.user.level
+          level: membership.user.level,
+          avatar: membership.user.avatar
 
           
         })) : []
