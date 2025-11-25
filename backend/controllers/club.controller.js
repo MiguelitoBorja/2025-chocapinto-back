@@ -51,9 +51,13 @@ const createClub = async (req, res) => {
 
     // Formatear para mantener compatibilidad con el frontend
     const clubFormatted = {
-      ...clubWithMembers,
-      members: clubWithMembers.memberships.map(membership => membership.user)
-    };
+  ...clubWithMembers,
+  members: clubWithMembers.memberships.map(membership => ({
+    ...membership.user,           // Esto ya incluye level y xp
+    role: membership.role,        // Agregar el rol
+    joinedAt: membership.joinedAt // Agregar fecha de unión
+  }))
+};
 
     res.json({ success: true, club: clubFormatted });
   } catch (error) {
@@ -127,9 +131,13 @@ const getAllClubs = async (req, res) => {
     
     // Transformar para mantener compatibilidad con el frontend
     const clubsFormatted = clubs.map(club => ({
-      ...club,
-      members: club.memberships.map(membership => membership.user)
-    }));
+  ...club,
+  members: club.memberships.map(membership => ({
+    ...membership.user,           // Incluye level, xp, etc.
+    role: membership.role,
+    joinedAt: membership.joinedAt
+  }))
+}));
     
     res.json({ success: true, clubs: clubsFormatted });
   } catch (error) {
@@ -161,7 +169,8 @@ const getClubById = async (req, res) => {
         },
         memberships: {
           include: {
-            user: true
+            user: true,
+            
           }
         }
       }
@@ -210,7 +219,10 @@ const getClubById = async (req, res) => {
         members: club.memberships ? club.memberships.map(membership => ({ 
           id: membership.user.id, 
           username: membership.user.username,
-          role: membership.role 
+          role: membership.role,
+          level: membership.user.level
+
+          
         })) : []
       },
     });
