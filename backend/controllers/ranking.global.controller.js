@@ -10,6 +10,7 @@ const getGlobalRanking = async (req, res) => {
         id: true,
         username: true,
         memberships: true,
+        avatar: true,
       },
     });
 
@@ -17,6 +18,7 @@ const getGlobalRanking = async (req, res) => {
       id: u.id,
       username: u.username,
       clubsCount: Array.isArray(u.memberships) ? u.memberships.length : 0,
+      avatar: u.avatar, // Incluir el avatar real del usuario
     }));
 
     const top = usersWithCounts
@@ -29,7 +31,7 @@ const getGlobalRanking = async (req, res) => {
       id: u.id,
       username: u.username,
       clubsCount: u.clubsCount,
-      avatarURL: `/images/avatars/default-${(u.id % 5) + 1}.png`,
+      avatar: u.avatar, // Usar el avatar real del usuario
     }));
 
     console.log(`Ranking global calculado: ${ranking.length} usuarios`);

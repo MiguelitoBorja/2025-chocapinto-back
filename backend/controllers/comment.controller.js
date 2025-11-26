@@ -83,9 +83,32 @@ const getCommentsLegacy = async (req, res) => {
 
     const comentarios = await prisma.comment.findMany({
       where: { clubBookId: clubBook.id },
-      include: { user: { select: { username: true } } }
+      include: { 
+        user: { 
+          select: { 
+            id: true, 
+            username: true, 
+            avatar: true 
+          } 
+        } 
+      },
+      orderBy: { createdAt: 'desc' }
     });
-    res.json({ success: true, comentarios });
+
+    // Formatear comentarios para incluir userId en el nivel superior
+    const formattedComentarios = comentarios.map(c => ({
+      id: c.id,
+      content: c.content,
+      userId: c.userId, // Agregar userId al nivel superior
+      createdAt: c.createdAt,
+      user: {
+        id: c.user.id,
+        username: c.user.username,
+        avatar: c.user.avatar
+      }
+    }));
+
+    res.json({ success: true, comentarios: formattedComentarios });
   } catch (error) {
     console.error("Error al obtener comentarios:", error);
     res.status(500).json({ success: false, message: "Error al obtener comentarios" });
