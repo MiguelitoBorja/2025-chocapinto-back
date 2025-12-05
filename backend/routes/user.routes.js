@@ -7,5 +7,6 @@ const userController = require('../controllers/user.controller');
 router.get('/user/:idOrUsername', userController.getUserByIdOrUsername);
 router.put('/updateUser', userController.updateUser);
 router.post('/deleteUser', userController.deleteUser);
-
+router.get('/user/:username/clubs', userController.getMyClubs); // <--- NUEVA RUTA IMPLEMENTADA
+router.put('/users/:userId/update-avatar', userController.updateAvatarSelection); // <--- NUEVA RUTA PARA AVATAR
 module.exports = router;

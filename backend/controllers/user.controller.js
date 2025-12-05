@@ -81,9 +81,123 @@ const deleteUser = async (req, res) => {
     res.status(500).json({ success: false, message: "Error al eliminar usuario" });
   }
 };
+const getMyClubs = async (req, res) => {
+    const { username } = req.params;
+
+    try {
+        // 1. Encontrar el usuario e incluir la relación
+        // CAMBIO CLAVE: Usamos 'memberships' en lugar de 'clubMembers'
+        const userWithClubs = await prisma.user.findUnique({
+            where: { username: username },
+            select: {
+                id: true,
+                // ¡CORRECCIÓN AQUÍ! Se usa el nombre de relación correcto
+                memberships: { 
+                    select: {
+                        role: true,
+                        joinedAt: true,
+                        club: {
+                            select: {
+                                id: true,
+                                name: true,
+                                description: true,
+                                id_owner: true,
+                                imagen: true,
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!userWithClubs) {
+            return res.status(404).json({ success: false, message: "Usuario no encontrado." });
+        }
+        
+        // 2. Formatear la respuesta
+        // userWithClubs.memberships contiene el array de membresías
+        const clubsData = userWithClubs.memberships.map(membership => ({
+            id: membership.club.id,
+            name: membership.club.name,
+            role: membership.role,
+            joinedAt: membership.joinedAt, 
+            imagen: membership.club.imagen
+        }));
+
+        res.json({ success: true, clubs: clubsData });
+
+    } catch (error) {
+        console.error("Error al obtener los clubes del usuario:", error);
+        res.status(500).json({ success: false, message: "Error interno del servidor al consultar clubes." });
+    }
+};
+const updateAvatarSelection = async (req, res) => {
+    const { userId } = req.params;
+    const { avatarName } = req.body; 
+
+    try {
+        // Validar que el userId sea válido
+        if (!userId || isNaN(parseInt(userId))) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "ID de usuario no válido" 
+            });
+        }
+
+        // Validar que el avatarName sea válido
+        if (!avatarName || typeof avatarName !== 'string') {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Nombre de avatar no válido" 
+            });
+        }
+
+        // Construir la ruta del avatar
+        const avatarPath = `../images/avatars/${avatarName}`;
+
+        // Verificar que el usuario exista antes de actualizar
+        const existingUser = await prisma.user.findUnique({
+            where: { id: parseInt(userId) }
+        });
+
+        if (!existingUser) {
+            return res.status(404).json({ 
+                success: false, 
+                message: "Usuario no encontrado" 
+            });
+        }
+
+        // Actualizar el avatar del usuario
+        const updatedUser = await prisma.user.update({
+            where: { id: parseInt(userId) },
+            data: { avatar: avatarPath },
+            select: { 
+                id: true, 
+                username: true, 
+                avatar: true 
+            }
+        });
+
+        res.json({ 
+            success: true, 
+            message: "Avatar actualizado correctamente",
+            avatar: avatarPath,
+            user: updatedUser 
+        });
+
+    } catch (error) {
+        console.error("Error actualizando avatar:", error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Error del servidor al actualizar el avatar" 
+        });
+    }
+};
 
 module.exports = {
   getUserByIdOrUsername,
   updateUser,
-  deleteUser
+  deleteUser,
+  getMyClubs,
+  updateAvatarSelection
 };

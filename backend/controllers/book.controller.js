@@ -1,12 +1,13 @@
 // src/controllers/book.controller.js
 const prisma = require('../db');
 const { validateRequiredFields } = require('../utils/validateFields');
+const { computeNewXpAndLevel, XP_PER_BOOK_FINISHED } = require('../utils/XPSystem');
 
 const addBookToClub = async (req, res) => {
   try {
     const { title, author, portada, thumbnail, id_api, username, categorias } = req.body;
     
-    // El clubId puede venir del body o de los params de la URL
+    // El clubId puede venir del body o de los params de la URL.
     const clubId = req.body.clubId || req.params.id;
 
     console.log("Datos recibidos en addBookToClub:", req.body);
@@ -30,17 +31,40 @@ const addBookToClub = async (req, res) => {
     // Verificar que es miembro del club
     const club = await prisma.club.findUnique({
       where: { id: Number(clubId) },
-      include: { members: true }
+      include: { 
+        memberships: {
+          include: {
+            user: true
+          }
+        }
+      }
     });
 
-    const isMember = club.members.some(member => member.id === user.id) || club.id_owner === user.id;
+    const isMember = club.memberships.some(membership => membership.user.id === user.id) || club.id_owner === user.id;
     if (!isMember) {
       return res.status(403).json({ success: false, message: "No eres miembro de este club" });
     }
 
     // Normalizar datos
     const cleanAuthor = author && author !== "null" && author.trim() !== "" ? author.trim() : null;
-    const cleanIdApi = id_api && id_api !== "null" && id_api !== "" ? id_api : null;
+    
+    // Convertir id_api a entero, validando que sea un número válido
+    let cleanIdApi = null;
+    if (id_api && id_api !== "null" && id_api !== "") {
+      const parsedId = parseInt(id_api, 10);
+      if (!isNaN(parsedId)) {
+        cleanIdApi = parsedId;
+      }
+    }
+    
+    console.log("🔍 Datos recibidos para libro:", {
+      title,
+      author: cleanAuthor,
+      id_api_original: id_api,
+      cleanIdApi: cleanIdApi,
+      cleanIdApi_type: typeof cleanIdApi,
+      portada: portada || thumbnail
+    });
     // La portada puede venir como 'portada' o 'thumbnail'
     const cleanPortada = (portada || thumbnail) && (portada || thumbnail) !== "null" && (portada || thumbnail).trim() !== "" 
       ? (portada || thumbnail).trim() 
@@ -50,8 +74,8 @@ const addBookToClub = async (req, res) => {
     let book = await prisma.book.findFirst({
       where: {
         OR: [
-          // Buscar por ID de API si existe
-          ...(cleanIdApi ? [{ id_api: cleanIdApi }] : []),
+          // Buscar por ID de API si existe (ya convertido a entero)
+          ...(cleanIdApi !== null && !isNaN(cleanIdApi) ? [{ id_api: cleanIdApi }] : []),
           // Buscar por título y autor
           { 
             AND: [
@@ -196,14 +220,20 @@ const removeBookFromClub = async (req, res) => {
     // Verificar que el club existe y los permisos
     const club = await prisma.club.findUnique({
       where: { id: Number(clubId) },
-      include: { members: true }
+      include: { 
+        memberships: {
+          include: {
+            user: true
+          }
+        }
+      }
     });
 
     if (!club) {
       return res.status(404).json({ success: false, message: "Club no encontrado" });
     }
 
-    const isMember = club.members.some(member => member.id === user.id) || club.id_owner === user.id;
+    const isMember = club.memberships.some(membership => membership.user.id === user.id) || club.id_owner === user.id;
     if (!isMember) {
       return res.status(403).json({ success: false, message: "No tienes permisos para eliminar libros de este club" });
     }
@@ -222,15 +252,45 @@ const removeBookFromClub = async (req, res) => {
         throw new Error("El libro no está en este club");
       }
 
-      // Eliminar comentarios relacionados con este ClubBook
+      console.log(`Eliminando libro ${bookId} del club ${clubId}, ClubBook ID: ${clubBook.id}`);
+
+      // 1. Eliminar opciones de votación relacionadas con este ClubBook
       try {
-        await tx.comment.deleteMany({
+        const deletedVotaciones = await tx.votacionOpcion.deleteMany({
           where: { 
             clubBookId: clubBook.id
           }
         });
+        console.log(`Eliminadas ${deletedVotaciones.count} opciones de votación`);
+      } catch (votacionError) {
+        console.log("Error al eliminar votaciones:", votacionError.message);
+      }
+
+      // 2. Actualizar períodos donde este libro era ganador
+      try {
+        const updatedPeriodos = await tx.periodoLectura.updateMany({
+          where: { 
+            libroGanadorId: clubBook.id
+          },
+          data: {
+            libroGanadorId: null
+          }
+        });
+        console.log(`Actualizados ${updatedPeriodos.count} períodos de lectura`);
+      } catch (periodoError) {
+        console.log("Error al actualizar períodos:", periodoError.message);
+      }
+
+      // 3. Eliminar comentarios relacionados con este ClubBook
+      try {
+        const deletedComments = await tx.comment.deleteMany({
+          where: { 
+            clubBookId: clubBook.id
+          }
+        });
+        console.log(`Eliminados ${deletedComments.count} comentarios`);
       } catch (commentError) {
-        console.log("No hay comentarios para eliminar o tabla comment no existe:", commentError.message);
+        console.log("Error al eliminar comentarios:", commentError.message);
         // Intentar con la tabla comentario si comment no existe
         try {
           await tx.comentario.deleteMany({
@@ -244,34 +304,79 @@ const removeBookFromClub = async (req, res) => {
         }
       }
 
-      // Eliminar el historial de lectura relacionado
+      // 4. Eliminar el historial de lectura relacionado
       try {
-        await tx.readingHistory.deleteMany({
+        const deletedHistory = await tx.readingHistory.deleteMany({
           where: {
             clubId: Number(clubId),
             bookId: Number(bookId)
           }
         });
+        console.log(`Eliminados ${deletedHistory.count} registros de historial`);
       } catch (historyError) {
-        console.log("No hay historial para eliminar:", historyError.message);
+        console.log("Error al eliminar historial:", historyError.message);
       }
 
-      // Eliminar de ClubBook
+      // 5. Eliminar de ClubBook
       await tx.clubBook.delete({
         where: { id: clubBook.id }
       });
+      console.log("ClubBook eliminado");
 
-      // Verificar si el libro está en otros clubes
+      // 6. Verificar si el libro está en otros clubes
       const otherClubBooks = await tx.clubBook.findFirst({
         where: { bookId: Number(bookId) }
       });
 
       // Si no está en ningún club, eliminarlo completamente
       if (!otherClubBooks) {
-        await tx.book.delete({
-          where: { id: Number(bookId) }
+        console.log(`Intentando eliminar libro completamente con id: ${bookId}`);
+        
+        // Verificar qué datos tiene el libro antes de eliminarlo
+        const bookToDelete = await tx.book.findUnique({
+          where: { id: Number(bookId) },
+          include: {
+            categorias: true,
+            readingHistory: true,
+            clubBooks: true
+          }
         });
-        console.log("Libro eliminado completamente de la base de datos");
+        console.log("Datos del libro a eliminar:", bookToDelete);
+        
+        // Verificar que no haya relaciones pendientes
+        if (bookToDelete.readingHistory.length > 0) {
+          console.log("Eliminando historial residual...");
+          await tx.readingHistory.deleteMany({
+            where: { bookId: Number(bookId) }
+          });
+        }
+
+        if (bookToDelete.clubBooks.length > 0) {
+          console.log("Hay ClubBooks residuales, no eliminar el libro");
+          return;
+        }
+
+        try {
+          // Eliminar relaciones many-to-many con categorías si existen
+          await tx.book.update({
+            where: { id: Number(bookId) },
+            data: {
+              categorias: {
+                set: []
+              }
+            }
+          });
+          console.log("Categorías desvinculadas");
+          
+          // Ahora eliminar el libro
+          await tx.book.delete({
+            where: { id: Number(bookId) }
+          });
+          console.log("Libro eliminado completamente de la base de datos");
+        } catch (bookDeleteError) {
+          console.error("Error específico al eliminar libro:", bookDeleteError);
+          throw bookDeleteError;
+        }
       } else {
         console.log("Libro mantenido porque está en otros clubes");
       }
@@ -280,7 +385,13 @@ const removeBookFromClub = async (req, res) => {
     res.json({ success: true, message: "Libro eliminado del club" });
   } catch (error) {
     console.error("Error al eliminar libro:", error);
-    res.status(500).json({ success: false, message: "Error interno del servidor" });
+    console.error("Stack trace:", error.stack);
+    res.status(500).json({ 
+      success: false, 
+      message: "Error interno del servidor",
+      error: error.message,
+      details: error.stack
+    });
   }
 };
 
@@ -300,36 +411,80 @@ const changeBookStatus = async (req, res) => {
       return res.status(400).json({ success: false, message: "Estado inválido" });
     }
 
-    // Obtener usuario
+    // Obtener usuario que hace el cambio
     const user = await prisma.user.findUnique({ where: { username } });
     if (!user) {
       return res.status(404).json({ success: false, message: "Usuario no encontrado" });
     }
 
-    // Verificar permisos
+    // Verificar que el club exista y que el usuario sea miembro
     const club = await prisma.club.findUnique({
       where: { id: clubId },
-      include: { members: true }
+      include: {
+        memberships: {
+          include: {
+            user: true,
+          },
+        },
+      },
     });
 
-    const isMember = club.members.some(member => member.id === user.id) || club.id_owner === user.id;
+    if (!club) {
+      return res.status(404).json({ success: false, message: "Club no encontrado" });
+    }
+
+    const isMember =
+      club.memberships.some(membership => membership.user.id === user.id) ||
+      club.id_owner === user.id;
+
     if (!isMember) {
       return res.status(403).json({ success: false, message: "No eres miembro de este club" });
     }
 
-    // Actualizar estado en ClubBook
-    await prisma.clubBook.updateMany({
+    // Obtener estado previo del libro en el club
+    const clubBookActual = await prisma.clubBook.findFirst({
       where: { clubId, bookId },
-      data: { estado }
     });
 
-    // Registrar en historial
+    if (!clubBookActual) {
+      return res.status(404).json({ success: false, message: "Libro no encontrado en este club" });
+    }
+
+    const estabaLeidoAntes = clubBookActual.estado === 'leido';
+
+    // Si pasa a "leido" y antes NO estaba en "leido",
+    // dar XP a todos los miembros del club
+    if (estado === 'leido' && !estabaLeidoAntes) {
+      const miembros = await prisma.clubMember.findMany({
+        where: { clubId },
+        include: { user: true },
+      });
+
+      // Actualizamos XP y nivel de todos en una transacción
+      await prisma.$transaction(
+        miembros.map(miembro => {
+          const { xp, level } = computeNewXpAndLevel(miembro.user, XP_PER_BOOK_FINISHED);
+          return prisma.user.update({
+            where: { id: miembro.userId },
+            data: { xp, level },
+          });
+        })
+      );
+    }
+
+    // Actualizar estado en ClubBook (estado del libro en el club)
+    await prisma.clubBook.updateMany({
+      where: { clubId, bookId },
+      data: { estado },
+    });
+
+    // Registrar en historial para el usuario que dispara el cambio
     const historialData = {
       userId: user.id,
       bookId,
       clubId,
       estado,
-      fechaCambio: new Date()
+      fechaCambio: new Date(),
     };
 
     if (estado === 'leyendo') {
@@ -338,13 +493,13 @@ const changeBookStatus = async (req, res) => {
 
     if (estado === 'leido') {
       historialData.fechaFin = new Date();
-      
-      // Buscar entrada "leyendo" previa
+
+      // Buscar la última entrada "leyendo" de ese usuario/libro/club
       const entradaLeyendo = await prisma.readingHistory.findFirst({
         where: { userId: user.id, bookId, clubId, estado: 'leyendo' },
-        orderBy: { fechaCambio: 'desc' }
+        orderBy: { fechaCambio: 'desc' },
       });
-      
+
       if (entradaLeyendo) {
         historialData.fechaInicio = entradaLeyendo.fechaInicio;
       }
@@ -352,12 +507,13 @@ const changeBookStatus = async (req, res) => {
 
     await prisma.readingHistory.create({ data: historialData });
 
-    res.json({ success: true, message: "Estado actualizado y registrado en historial" });
+    res.json({ success: true, message: "Estado actualizado, historial registrado y XP asignada (si correspondía)" });
   } catch (error) {
     console.error('Error al cambiar estado:', error);
     res.status(500).json({ success: false, message: "Error al actualizar estado" });
   }
 };
+
 
 const searchBooks = async (req, res) => {
   try {
@@ -399,10 +555,155 @@ const getAllBooks = async (req, res) => {
   }
 };
 
+// controllers/book.controller.js
+
+// controllers/book.controller.js
+
+const searchCursos = async (req, res) => {
+    try {
+        const { query } = req.query;
+        
+        // 1. Configuración Exacta (La que te pasaron)
+        const SUPABASE_URL = "https://apjepniceyfghladqqxg.supabase.co/rest/v1/get_modulos";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFwamVwbmljZXlmZ2hsYWRxcXhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc4NjE5NjcsImV4cCI6MjA3MzQzNzk2N30.gVnCO7ALvbF3Zol9k-R6k-CyPDh8-7KjJiqRuU5YVRk";
+
+        // 2. URL Limpia (Sin filtros raros para evitar el error de Cloudflare)
+        // Solo agregamos ?select=* para asegurar que traiga las columnas
+        const url = `${SUPABASE_URL}?select=*`;
+
+        console.log("🔗 Conectando a Supabase...");
+
+        // 3. Petición Fetch
+        const response = await fetch(url, {
+            method: "GET",
+            headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "Content-Type": "application/json" // Por si acaso
+            }
+        });
+        
+        if (!response.ok) {
+            // Si falla, intentamos leer el texto del error
+            const errorText = await response.text();
+            console.error("❌ Error Supabase:", response.status, errorText);
+            throw new Error(`Error API externa: ${response.status}`);
+        }
+        
+        const cursosRaw = await response.json();
+        
+        // Debug: Ver qué propiedades tienen realmente los cursos
+        if (cursosRaw.length > 0) {
+            console.log("📦 Ejemplo de curso recibido:", Object.keys(cursosRaw[0]));
+        }
+
+        // 4. FILTRADO LOCAL (Más seguro)
+        // Filtramos aquí en tu servidor en lugar de en la URL
+        let cursosFiltrados = cursosRaw;
+        
+        if (query) {
+            const queryLower = query.toLowerCase();
+            cursosFiltrados = cursosRaw.filter(curso => {
+                // Buscamos en las propiedades probables (ajusta esto si ves el log)
+                const titulo = curso.nombre || curso.titulo || curso.name || curso.descripcion || "";
+                return titulo.toLowerCase().includes(queryLower);
+            });
+        }
+
+        // 5. MAPEO (Adaptar a tu formato de Libro)
+        const cursosComoLibros = cursosFiltrados.map(curso => ({
+            // Intentamos encontrar el título en varias propiedades posibles
+            title: curso.nombre || curso.titulo || curso.modulo || "Curso sin título", 
+            
+            id_api: curso.id, 
+            
+            author: "señasApp", 
+            
+            // Intentamos encontrar imagen
+            portada:"../images/senas.png", 
+            
+            descripcion: curso.descripcion || "Curso de SeñasApp"
+        }));
+
+        console.log(`✅ Encontrados ${cursosComoLibros.length} cursos.`);
+        res.json({ success: true, cursos: cursosComoLibros });
+
+    } catch (error) {
+        console.error("💥 Error en searchCursos:", error.message);
+        // Devolvemos array vacío para que el front no se rompa
+        res.status(500).json({ success: false, message: "Error buscando cursos", cursos: [] });
+    }
+};
+
+
+
+
+const agregarCursoComoLibro = async (req, res) => {
+    // 1. Obtener datos de la URL y del Body
+    const clubId = parseInt(req.params.id); // Viene de /club/:id/...
+    const { title, id_api, username } = req.body; 
+    
+    const AUTHOR_DEFAULT = "señasApp";
+    const PORTADA_DEFAULT = "/images/señas.png";
+
+    try {
+        // 2. Buscar al usuario que está agregando el curso
+        // Necesitamos su ID para el campo 'addedById'
+        const user = await prisma.user.findUnique({
+            where: { username: username }
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "Usuario no encontrado" });
+        }
+
+        // 3. Crear el Libro y Vincularlo al Club (Transacción)
+        // Usamos transaction para que si falla uno, no se cree nada.
+        const resultado = await prisma.$transaction(async (prisma) => {
+            
+            // A. Crear el "Libro" (que en realidad es el curso)
+            const nuevoLibro = await prisma.book.create({
+                data: {
+                    title: title,
+                    id_api: typeof id_api === 'string' ? parseInt(id_api) : id_api, // Asegurar que sea Int
+                    author: AUTHOR_DEFAULT, 
+                    portada: PORTADA_DEFAULT,
+                }
+            });
+
+            // B. Vincularlo al Club (Crear ClubBook)
+            const nuevoClubBook = await prisma.clubBook.create({
+                data: {
+                    clubId: clubId,
+                    bookId: nuevoLibro.id,
+                    addedById: user.id,
+                    estado: 'por_leer' // Estado inicial por defecto
+                }
+            });
+
+            return { libro: nuevoLibro, clubBook: nuevoClubBook };
+        });
+        
+        console.log(`✅ Curso agregado como libro: ${title}`);
+        
+        res.json({ 
+            success: true, 
+            message: "Curso agregado exitosamente", 
+            book: resultado.libro 
+        });
+
+    } catch (error) {
+        console.error("Error guardando curso:", error);
+        res.status(500).json({ success: false, error: "Error guardando curso en la base de datos" });
+    }
+};
+
 module.exports = {
   addBookToClub,
   removeBookFromClub,
   changeBookStatus,
   getAllBooks,
-  searchBooks
+  searchBooks,
+  searchCursos,
+  agregarCursoComoLibro
 };
