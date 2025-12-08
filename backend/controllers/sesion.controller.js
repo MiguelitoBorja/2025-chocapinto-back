@@ -118,19 +118,28 @@ async function obtenerSesionesClub(req, res) {
     const { tipo } = req.query; // "proximas" o "pasadas"
 
     const now = new Date();
+    
+    // Actualizar automáticamente sesiones programadas que ya pasaron su hora
+    await prisma.sesionLectura.updateMany({
+      where: {
+        clubId: parseInt(clubId),
+        estado: "PROGRAMADA",
+        fechaHora: { lt: now }
+      },
+      data: {
+        estado: "COMPLETADA"
+      }
+    });
+    
     let whereCondition = {
       clubId: parseInt(clubId)
     };
 
     // Filtrar por tipo
     if (tipo === "proximas") {
-      whereCondition.fechaHora = { gte: now };
-      whereCondition.estado = { not: "CANCELADA" };
+      whereCondition.estado = "PROGRAMADA";
     } else if (tipo === "pasadas") {
-      whereCondition.OR = [
-        { fechaHora: { lt: now } },
-        { estado: "COMPLETADA" }
-      ];
+      whereCondition.estado = "COMPLETADA";
     }
 
     const sesiones = await prisma.sesionLectura.findMany({
