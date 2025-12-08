@@ -119,12 +119,15 @@ async function obtenerSesionesClub(req, res) {
 
     const now = new Date();
     
+    // Ajustar la hora actual restando 3 horas para compensar zona horaria Argentina (UTC-3)
+    const nowArgentina = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+    
     // Actualizar automáticamente sesiones programadas que ya pasaron su hora
     await prisma.sesionLectura.updateMany({
       where: {
         clubId: parseInt(clubId),
         estado: "PROGRAMADA",
-        fechaHora: { lt: now }
+        fechaHora: { lt: nowArgentina }
       },
       data: {
         estado: "COMPLETADA"
