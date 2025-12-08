@@ -183,8 +183,9 @@ const getClubById = async (req, res) => {
     const solicitudes = club.solicitudes ? club.solicitudes.map(s => ({
       id: s.id,
       username: s.user.username,
+      avatar: s.user.avatar,
       estado: s.estado,
-      createdAt: s.createdAt
+      fecha_solicitud: s.createdAt
     })) : [];
     
     let ownerName = null;
