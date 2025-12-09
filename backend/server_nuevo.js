@@ -17,6 +17,7 @@ const rankingGlobalRoutes = require('./routes/ranking.global.routes');
 const apiBooksyRoutes = require('./routes/api_booksy.routes');
 const authExternalRoutes = require('./routes/auth.external.routes');
 const sesionRoutes = require('./routes/sesion.routes');
+const notificacionesRoutes = require('./routes/notificaciones.routes');
 
 const app = express();
 
@@ -68,6 +69,7 @@ app.use('/api/ranking', rankingRoutes);
 app.use('/api', periodoRoutes);
 app.use('/api/global/ranking', rankingGlobalRoutes);
 app.use('/api/sesiones', sesionRoutes);
+app.use('/api/notificaciones', notificacionesRoutes);
 
 
 // Rutas legacy (mantener compatibilidad)
