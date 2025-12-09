@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { computeNewXpAndLevel, XP_PER_BOOK_FINISHED } = require('../utils/XPSystem');
+const { notificarMiembrosClub } = require('./notificaciones.controller');
 
 // ========== ENDPOINT A: ESTADO ACTUAL DEL CLUB ==========
 
@@ -234,13 +235,7 @@ const crearPeriodo = async (req, res) => {
         }
 
         // 5. Crear el período con sus opciones
-        console.log(`📝 Creando período con datos:`, {
-            clubId: clubId,
-            nombre: nombre,
-            fechaFinVotacion: fechaVotacion,
-            fechaFinLectura: fechaLectura,
-            opciones: clubBookIds.map(id => ({ clubBookId: parseInt(id) }))
-        });
+        
         
         const nuevoPeriodo = await prisma.periodoLectura.create({
             data: {
@@ -267,7 +262,12 @@ const crearPeriodo = async (req, res) => {
                 }
             }
         });
-
+        await notificarMiembrosClub(clubId, {
+            tipo: 'VOTACION_ABIERTA',
+            titulo: 'Nueva votación abierta',
+            mensaje: `Se ha iniciado una votación para el período "${nombre}". ¡Vota por tu libro favorito!`,
+            link: `/club/${clubId}`
+        });
         console.log(`✅ Período creado exitosamente: ${nuevoPeriodo.id}`);
 
         return res.json({
@@ -564,7 +564,12 @@ const cerrarVotacion = async (req, res) => {
             `🎲 Votación cerrada con EMPATE - Ganador aleatorio: ${ganador.opcion.clubBook.book.title} (${ganador.votos} votos)` :
             `🏆 Votación cerrada - Ganador: ${ganador.opcion.clubBook.book.title} con ${ganador.votos} votos`;
 
-        console.log(mensajeResultado);
+        await notificarMiembrosClub(periodo.clubId, {
+            tipo: 'VOTACION_CERRADA',
+            titulo: 'Votación cerrada',
+            mensaje: `La votación "${periodo.nombre}" ha finalizado. El libro ganador es: "${ganador.opcion.clubBook.book.title}"`,
+            link: `/club/${periodo.clubId}`
+        });
 
         return res.json({
             success: true,
@@ -930,7 +935,13 @@ const cerrarVotacionAutomatica = async (periodo) => {
                     updatedAt: new Date()
                 }
             });
-            console.log(`⚠️ Votación cerrada automáticamente SIN VOTOS: ${periodo.nombre}`);
+
+            await notificarMiembrosClub(periodo.clubId, {
+                tipo: 'VOTACION_CERRADA',
+                titulo: 'Votación finalizada',
+                mensaje: `La votación "${periodo.nombre}" ha expirado. El libro ganador es: "${ganador.opcion.clubBook.book.title}"`,
+                link: `/club/${periodo.clubId}`
+            });
             return;
         }
 
@@ -997,7 +1008,12 @@ const concluirLecturaAutomatica = async (periodo) => {
                 }
             });
 
-            console.log(`✅ Lectura concluida automáticamente - Libro: ${periodo.libroGanador?.book?.title}`);
+            await notificarMiembrosClub(periodo.clubId, {
+                tipo: 'LECTURA_FINALIZADA',
+                titulo: 'Período de lectura finalizado',
+                mensaje: `El período de lectura "${periodo.nombre}" ha concluido. ¡Ya puedes comentar sobre el libro!`,
+                link: `/club/${periodo.clubId}`
+            });
         }
 
     } catch (error) {
