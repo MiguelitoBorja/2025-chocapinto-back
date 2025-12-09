@@ -161,7 +161,7 @@ const requestPasswordReset = async (req, res) => {
 
         // 4. Enviar Email con Nodemailer
         // OJO: Cambia la URL por la de tu Frontend en Render
-        const resetLink = `https://booksy-front-juani.onrender.com/reset-password.html?token=${resetToken}`;
+        const resetLink = `https://booksy-front-juani.onrender.com/html/reset-password.html?token=${resetToken}`;
 
         await sendPasswordResetEmail(email, resetLink);
 

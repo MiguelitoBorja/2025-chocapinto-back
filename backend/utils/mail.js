@@ -1,28 +1,14 @@
 // backend/utils/mail.js
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 
-// Configurar el transporter con SendGrid
-const transporter = nodemailer.createTransport({
-  host: 'smtp.sendgrid.net',
-  port: 587,
-  secure: false,
-  auth: {
-    user: 'apikey', // Este literal "apikey" es correcto para SendGrid
-    pass: process.env.SENDGRID_API_KEY,
-  },
-});
+// Configurar SendGrid con la API Key
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // Verificar configuración al iniciar
 if (!process.env.SENDGRID_API_KEY || !process.env.EMAIL_USER) {
   console.error("❌ Error: SENDGRID_API_KEY o EMAIL_USER no están configuradas");
 } else {
-  transporter.verify((error, success) => {
-    if (error) {
-      console.error("❌ Error verificando configuración de email:", error);
-    } else {
-      console.log("✅ Servidor de email configurado correctamente (SendGrid)");
-    }
-  });
+  console.log("✅ SendGrid configurado correctamente");
 }
 
 /**
@@ -32,9 +18,9 @@ if (!process.env.SENDGRID_API_KEY || !process.env.EMAIL_USER) {
  */
 async function sendPasswordResetEmail(to, resetLink) {
   try {
-    const mailOptions = {
-      from: `"Booksy 📚" <${process.env.EMAIL_USER}>`,
+    const msg = {
       to: to,
+      from: process.env.EMAIL_USER, // Debe estar verificado en SendGrid
       subject: '🔐 Recuperación de contraseña - Booksy',
       html: `
         <!DOCTYPE html>
@@ -139,11 +125,13 @@ async function sendPasswordResetEmail(to, resetLink) {
       `,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`📧 Mail de recuperación enviado a ${to} (ID: ${info.messageId})`);
-    return info;
+    await sgMail.send(msg);
+    console.log(`📧 Mail de recuperación enviado a ${to}`);
   } catch (error) {
     console.error('❌ Error al enviar mail:', error);
+    if (error.response) {
+      console.error('Detalles del error:', error.response.body);
+    }
     throw error;
   }
 }
