@@ -262,14 +262,49 @@ const crearPeriodo = async (req, res) => {
                 }
             }
         });
-        await notificarMiembrosClub(clubId, {
-            tipo: 'VOTACION_ABIERTA',
-            titulo: 'Nueva votación abierta',
-            mensaje: `Se ha iniciado una votación para el período "${nombre}". ¡Vota por tu libro favorito!`,
-            link: `/club/${clubId}`
-        });
+
         console.log(`✅ Período creado exitosamente: ${nuevoPeriodo.id}`);
 
+        // ========== NOTIFICAR A LOS MIEMBROS DEL CLUB ==========
+        try {
+            const fechaFormateada = new Date(fechaFinVotacion).toLocaleDateString('es-ES', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            const librosNombres = nuevoPeriodo.opciones
+                .map(o => o.clubBook.book.title)
+                .join(', ');
+
+            await notificarMiembrosClub(
+                clubId,
+                'VOTACION_ABIERTA',
+                'Nueva votación abierta',
+                `Se ha iniciado una votación para el período "${nombre}". Los libros disponibles son: ${librosNombres}. La votación cierra el ${fechaFormateada}.`,
+                {
+                    periodoId: nuevoPeriodo.id,
+                    nombre: nombre,
+                    fechaFinVotacion: fechaFinVotacion,
+                    clubName: club.name,
+                    libros: nuevoPeriodo.opciones.map(o => ({
+                        id: o.clubBook.id,
+                        titulo: o.clubBook.book.title
+                    }))
+                },
+                user.id // Excluir al creador de las notificaciones
+            );
+
+            console.log(`📢 Notificaciones enviadas a miembros del club ${clubId}`);
+        } catch (notifError) {
+            console.error('⚠️ Error al enviar notificaciones (no crítico):', notifError.message);
+            // No detener el proceso si falla la notificación - el período ya fue creado exitosamente
+        }
+        // ======================================================
+
+        // Retornar éxito SIEMPRE que el período se haya creado
         return res.json({
             success: true,
             message: `Período "${nombre}" creado exitosamente`,
@@ -564,12 +599,27 @@ const cerrarVotacion = async (req, res) => {
             `🎲 Votación cerrada con EMPATE - Ganador aleatorio: ${ganador.opcion.clubBook.book.title} (${ganador.votos} votos)` :
             `🏆 Votación cerrada - Ganador: ${ganador.opcion.clubBook.book.title} con ${ganador.votos} votos`;
 
-        await notificarMiembrosClub(periodo.clubId, {
-            tipo: 'VOTACION_CERRADA',
-            titulo: 'Votación cerrada',
-            mensaje: `La votación "${periodo.nombre}" ha finalizado. El libro ganador es: "${ganador.opcion.clubBook.book.title}"`,
-            link: `/club/${periodo.clubId}`
-        });
+        // Notificar miembros sobre cierre de votación
+        try {
+            await notificarMiembrosClub(
+                periodo.clubId,
+                'VOTACION_CERRADA',
+                'Votación cerrada',
+                `La votación "${periodo.nombre}" ha finalizado. El libro ganador es: "${ganador.opcion.clubBook.book.title}"`,
+                {
+                    periodoId: periodo.id,
+                    nombre: periodo.nombre,
+                    clubName: periodo.club.name,
+                    libroGanador: ganador.opcion.clubBook.book.title,
+                    votosGanador: ganador.votos,
+                    empate: esEmpate
+                },
+                user.id
+            );
+            console.log(`📢 Notificaciones enviadas sobre cierre de votación`);
+        } catch (notifError) {
+            console.error('⚠️ Error al enviar notificaciones (no crítico):', notifError.message);
+        }
 
         return res.json({
             success: true,
@@ -936,12 +986,21 @@ const cerrarVotacionAutomatica = async (periodo) => {
                 }
             });
 
-            await notificarMiembrosClub(periodo.clubId, {
-                tipo: 'VOTACION_CERRADA',
-                titulo: 'Votación finalizada',
-                mensaje: `La votación "${periodo.nombre}" ha expirado. El libro ganador es: "${ganador.opcion.clubBook.book.title}"`,
-                link: `/club/${periodo.clubId}`
-            });
+            try {
+                await notificarMiembrosClub(
+                    periodo.clubId,
+                    'VOTACION_CERRADA',
+                    'Votación finalizada',
+                    `La votación "${periodo.nombre}" ha expirado sin votos suficientes.`,
+                    {
+                        periodoId: periodo.id,
+                        nombre: periodo.nombre
+                    },
+                    null
+                );
+            } catch (notifError) {
+                console.error('⚠️ Error al enviar notificaciones:', notifError.message);
+            }
             return;
         }
 
@@ -1008,12 +1067,22 @@ const concluirLecturaAutomatica = async (periodo) => {
                 }
             });
 
-            await notificarMiembrosClub(periodo.clubId, {
-                tipo: 'LECTURA_FINALIZADA',
-                titulo: 'Período de lectura finalizado',
-                mensaje: `El período de lectura "${periodo.nombre}" ha concluido. ¡Ya puedes comentar sobre el libro!`,
-                link: `/club/${periodo.clubId}`
-            });
+            try {
+                await notificarMiembrosClub(
+                    periodo.clubId,
+                    'LECTURA_FINALIZADA',
+                    'Período de lectura finalizado',
+                    `El período de lectura "${periodo.nombre}" ha concluido. ¡Ya puedes comentar sobre el libro!`,
+                    {
+                        periodoId: periodo.id,
+                        nombre: periodo.nombre,
+                        libroGanador: periodo.libroGanador?.book?.title
+                    },
+                    null
+                );
+            } catch (notifError) {
+                console.error('⚠️ Error al enviar notificaciones:', notifError.message);
+            }
         }
 
     } catch (error) {

@@ -28,6 +28,12 @@ const crearNotificacion = async (userId, tipo, titulo, mensaje, datos = null) =>
  */
 const crearNotificacionesMasivas = async (userIds, tipo, titulo, mensaje, datos = null) => {
   try {
+    // Validar parámetros requeridos
+    if (!tipo || !titulo || !mensaje) {
+      console.error('❌ Parámetros faltantes en crearNotificacionesMasivas:', { tipo, titulo, mensaje });
+      throw new Error('Los parámetros tipo, titulo y mensaje son requeridos');
+    }
+
     const notificaciones = await prisma.notificacion.createMany({
       data: userIds.map(userId => ({
         userId,
@@ -231,6 +237,8 @@ const limpiarNotificacionesLeidas = async (req, res) => {
  */
 const notificarMiembrosClub = async (clubId, tipo, titulo, mensaje, datos = null, excluirUsuarioId = null) => {
   try {
+    console.log('📨 notificarMiembrosClub llamada con:', { clubId, tipo, titulo, mensaje, excluirUsuarioId });
+    
     // Obtener todos los miembros del club
     const miembros = await prisma.clubMember.findMany({
       where: { clubId },
@@ -244,12 +252,15 @@ const notificarMiembrosClub = async (clubId, tipo, titulo, mensaje, datos = null
     }
 
     if (userIds.length === 0) {
+      console.log('⚠️ No hay usuarios para notificar');
       return { count: 0 };
     }
 
     // Agregar clubId a los datos
     const datosConClub = { ...datos, clubId };
 
+    console.log(`✅ Creando notificaciones para ${userIds.length} usuarios`);
+    
     // Crear notificaciones para todos
     await crearNotificacionesMasivas(userIds, tipo, titulo, mensaje, datosConClub);
 
