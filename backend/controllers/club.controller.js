@@ -2,6 +2,7 @@
 const prisma = require('../db');
 const { validateRequiredFields } = require('../utils/validateFields');
 const { crearNotificacion } = require('./notificaciones.controller');
+const { otorgarXP } = require('../utils/XPRewards');
 
 const createClub = async (req, res) => {
   try {
@@ -340,6 +341,9 @@ const manageMembershipRequest = async (req, res) => {
           }
         );
         console.log(`📢 Notificación enviada: Solicitud aceptada para usuario ${solicitud.userId}`);
+        
+        // Otorgar XP por unirse al club
+        await otorgarXP(solicitud.userId, 'UNIRSE_CLUB');
       } catch (notifError) {
         console.error('⚠️ Error al enviar notificación de solicitud aceptada:', notifError.message);
       }

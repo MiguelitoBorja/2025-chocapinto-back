@@ -1,7 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { computeNewXpAndLevel, XP_PER_BOOK_FINISHED } = require('../utils/XPSystem');
-const { notificarMiembrosClub } = require('./notificaciones.controller');
+const { notificarMiembrosClub, crearNotificacion } = require('./notificaciones.controller');
+const { otorgarXP } = require('../utils/XPRewards');
 
 // ========== ENDPOINT A: ESTADO ACTUAL DEL CLUB ==========
 
@@ -448,6 +449,9 @@ const votar = async (req, res) => {
 
         console.log(`✅ Voto registrado: ${user.username} → ${nuevoVoto.opcion.clubBook.book.title}`);
 
+        // Otorgar XP por votar
+        await otorgarXP(user.id, 'VOTAR');
+
         return res.json({
             success: true,
             message: `Voto registrado por "${nuevoVoto.opcion.clubBook.book.title}"`,
@@ -742,13 +746,31 @@ const concluirLectura = async (req, res) => {
                 });
 
                 for (const miembro of miembros) {
+                    const oldLevel = miembro.user.level || 1;
                     const { xp, level } = computeNewXpAndLevel(miembro.user, XP_PER_BOOK_FINISHED);
 
                     await tx.user.update({
                         where: { id: miembro.userId },
                         data: { xp, level }
                     });
-                    console.log('XP actualizada - userId=${miembro.userId} xp=${xp} level=${level}');
+                    
+                    console.log(`XP actualizada - userId=${miembro.userId} xp=${xp} level=${level}`);
+                    
+                    // Notificar si subió de nivel (fuera de la transacción)
+                    if (level > oldLevel) {
+                        crearNotificacion(
+                            miembro.userId,
+                            'NIVEL_SUBIDO',
+                            '🎉 ¡Subiste de nivel!',
+                            `¡Felicidades! Ahora eres nivel ${level}. Ganaste ${XP_PER_BOOK_FINISHED} XP por completar la lectura.`,
+                            { 
+                                oldLevel, 
+                                newLevel: level, 
+                                xp,
+                                xpGanado: XP_PER_BOOK_FINISHED
+                            }
+                        ).catch(err => console.error('Error al notificar nivel subido:', err));
+                    }
                 }
             }
             

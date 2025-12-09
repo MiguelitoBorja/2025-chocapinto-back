@@ -1,6 +1,7 @@
 // src/controllers/comment.controller.js
 const prisma = require('../db');
 const { validateRequiredFields } = require('../utils/validateFields');
+const { otorgarXP } = require('../utils/XPRewards');
 
 const getComments = async (req, res) => {
   try {
@@ -149,6 +150,16 @@ const createComment = async (req, res) => {
       return res.status(404).json({ success: false, message: "El libro no está en este club" });
     }
 
+    // Verificar si es el primer comentario del usuario en este libro
+    const comentariosAnteriores = await prisma.comment.count({
+      where: {
+        userId: user.id,
+        clubBookId: clubBook.id
+      }
+    });
+
+    const esPrimerComentario = comentariosAnteriores === 0;
+
     // Crear comentario usando el modelo Comment correcto
     const comment = await prisma.comment.create({
       data: {
@@ -158,6 +169,13 @@ const createComment = async (req, res) => {
       },
       include: { user: { select: { username: true } } }
     });
+
+    // Otorgar XP por comentar
+    if (esPrimerComentario) {
+      await otorgarXP(user.id, 'PRIMER_COMENTARIO_LIBRO');
+    } else {
+      await otorgarXP(user.id, 'COMENTARIO_ADICIONAL');
+    }
 
     res.json({
       success: true,

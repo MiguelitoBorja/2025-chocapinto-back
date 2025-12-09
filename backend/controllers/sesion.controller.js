@@ -1,6 +1,7 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const { notificarMiembrosClub } = require('./notificaciones.controller');
+const { otorgarXP } = require('../utils/XPRewards');
 
 /**
  * Crear una nueva sesión de lectura (solo moderadores/owner)
@@ -414,6 +415,11 @@ async function confirmarAsistencia(req, res) {
       }
     });
 
+    // Otorgar XP solo si confirma que asistirá
+    if (estado === 'ASISTIRE') {
+      await otorgarXP(user.id, 'CONFIRMAR_ASISTENCIA');
+    }
+
     return res.json({
       success: true,
       message: "Confirmación registrada exitosamente",
@@ -503,6 +509,11 @@ async function registrarAsistenciaReal(req, res) {
         })
       )
     );
+
+    // Otorgar XP a todos los asistentes
+    for (const asistencia of asistencias) {
+      await otorgarXP(asistencia.userId, 'ASISTIR_SESION');
+    }
 
     // Actualizar estado de la sesión a COMPLETADA
     await prisma.sesionLectura.update({

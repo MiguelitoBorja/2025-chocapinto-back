@@ -2,6 +2,7 @@
 const prisma = require('../db');
 const { validateRequiredFields } = require('../utils/validateFields');
 const { computeNewXpAndLevel, XP_PER_BOOK_FINISHED } = require('../utils/XPSystem');
+const { crearNotificacion } = require('./notificaciones.controller');
 
 const addBookToClub = async (req, res) => {
   try {
@@ -463,7 +464,25 @@ const changeBookStatus = async (req, res) => {
       // Actualizamos XP y nivel de todos en una transacción
       await prisma.$transaction(
         miembros.map(miembro => {
+          const oldLevel = miembro.user.level || 1;
           const { xp, level } = computeNewXpAndLevel(miembro.user, XP_PER_BOOK_FINISHED);
+          
+          // Notificar si subió de nivel
+          if (level > oldLevel) {
+            crearNotificacion(
+              miembro.userId,
+              'NIVEL_SUBIDO',
+              '🎉 ¡Subiste de nivel!',
+              `¡Felicidades! Ahora eres nivel ${level}. Ganaste ${XP_PER_BOOK_FINISHED} XP por completar un libro.`,
+              { 
+                oldLevel, 
+                newLevel: level, 
+                xp,
+                xpGanado: XP_PER_BOOK_FINISHED
+              }
+            ).catch(err => console.error('Error al notificar nivel subido:', err));
+          }
+          
           return prisma.user.update({
             where: { id: miembro.userId },
             data: { xp, level },

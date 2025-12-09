@@ -24,6 +24,16 @@
 - **Verificación**: Automática cada 1 hora
 - **Archivo**: `sesion.controller.js` (función `notificarSesionesCercanas`)
 
+### 4. **Nivel Subido** 🎉
+- **Cuándo**: Cuando un usuario gana suficiente XP y sube de nivel
+- **Destinatario**: El usuario que subió de nivel
+- **Tipo**: `NIVEL_SUBIDO`
+- **Trigger**: Automático al completar libros (cuando pasa a estado "leído")
+- **Archivos**: 
+  - `book.controller.js` (función que actualiza estado de libro)
+  - `periodo.controller.js` (función `concluirLectura`)
+- **XP Ganado**: 100 XP por libro completado
+
 ## 🔧 Archivos Modificados
 
 ### Backend
@@ -33,13 +43,19 @@
 
 2. **periodo.controller.js**
    - Agregada función `notificarVotacionesPorVencer()`
+   - Agregado import de `crearNotificacion`
+   - Modificada función `concluirLectura` para notificar nivel subido
    - Exportada en `module.exports`
 
 3. **sesion.controller.js**
    - Agregada función `notificarSesionesCercanas()`
    - Exportada en `module.exports`
 
-4. **utils/scheduledTasks.js** (NUEVO)
+4. **book.controller.js**
+   - Agregado import de `crearNotificacion`
+   - Modificada actualización de XP para notificar cuando sube de nivel
+
+5. **utils/scheduledTasks.js** (NUEVO)
    - Función `ejecutarVerificacionesPeriodicas()`
    - Función `iniciarVerificacionesAutomaticas()`
    - Ejecuta verificaciones cada 1 hora
@@ -61,12 +77,14 @@
      - `SOLICITUD_ACEPTADA`: Check en círculo (success)
      - `SOLICITUD_RECHAZADA`: X en círculo (error)
      - `LECTURA_FINALIZADA`: Libro con check (success)
+     - `NIVEL_SUBIDO`: Gráfico creciente (logro)
 
 2. **notificacion-alerta.css**
    - Agregados estilos para nuevas clases:
      - `.notif-urgente`: Fondo rojo claro, icono rojo oscuro
      - `.notif-success`: Fondo verde claro, icono verde oscuro
      - `.notif-error`: Fondo rojo claro, icono rojo intenso
+     - `.notif-logro`: Fondo amarillo claro, icono dorado
 
 ## 🚀 Cómo Usar
 
@@ -127,6 +145,16 @@ Respuesta:
    - O ejecutar manualmente: `POST /api/scheduled/verificar`
 3. Todos los miembros del club recibirán el recordatorio
 4. Incluye título, fecha, hora y lugar de la sesión
+
+### 4. Nivel Subido
+1. Completa un libro (cambia su estado a "leído")
+2. Automáticamente se otorgan 100 XP a todos los miembros del club
+3. Si algún miembro alcanza el siguiente nivel (cada 500 XP), recibe la notificación
+4. La notificación muestra:
+   - Nivel anterior y nuevo nivel
+   - XP total actual
+   - XP ganado (100 por libro)
+5. El badge de XP en el header se actualiza automáticamente
 
 ## 📊 Logs del Sistema
 
