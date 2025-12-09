@@ -1,24 +1,26 @@
 // backend/utils/mail.js
 const nodemailer = require('nodemailer');
 
-// Configurar el transporter con Gmail
+// Configurar el transporter con SendGrid
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.sendgrid.net',
+  port: 587,
+  secure: false, // true for 465, false for other ports
   auth: {
-    user: process.env.EMAIL_USER, // Tu Gmail (ej: booksy.clubes@gmail.com)
-    pass: process.env.EMAIL_PASS, // App Password de Google
+    user: 'apikey', // Este literal "apikey" es correcto
+    pass: process.env.SENDGRID_API_KEY, // Tu API key de SendGrid
   },
 });
 
 // Verificar configuración al iniciar
-if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-  console.error("❌ Error: EMAIL_USER o EMAIL_PASS no están configuradas");
+if (!process.env.SENDGRID_API_KEY || !process.env.EMAIL_USER) {
+  console.error("❌ Error: SENDGRID_API_KEY o EMAIL_USER no están configuradas");
 } else {
   transporter.verify((error, success) => {
     if (error) {
       console.error("❌ Error verificando configuración de email:", error);
     } else {
-      console.log("✅ Servidor de email configurado correctamente");
+      console.log("✅ Servidor de email configurado correctamente (SendGrid)");
     }
   });
 }
@@ -31,7 +33,7 @@ if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
 async function sendPasswordResetEmail(to, resetLink) {
   try {
     const mailOptions = {
-      from: `"Booksy 📚" <${process.env.EMAIL_USER}>`,
+      from: `"Booksy 📚" <${process.env.EMAIL_USER}>`, // Debe ser un email verificado en SendGrid
       to: to,
       subject: '🔐 Recuperación de contraseña - Booksy',
       html: `
