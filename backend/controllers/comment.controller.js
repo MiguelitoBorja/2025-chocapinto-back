@@ -227,6 +227,16 @@ const createCommentLegacy = async (req, res) => {
       return res.status(404).json({ success: false, message: "El libro no está en este club" });
     }
 
+    // Verificar si es el primer comentario del usuario en este libro
+    const comentariosAnteriores = await prisma.comment.count({
+      where: {
+        userId: Number(userId),
+        clubBookId: clubBook.id
+      }
+    });
+
+    const esPrimerComentario = comentariosAnteriores === 0;
+
     // Crear comentario usando el modelo Comment
     const comment = await prisma.comment.create({
       data: {
@@ -236,6 +246,13 @@ const createCommentLegacy = async (req, res) => {
       },
       include: { user: { select: { username: true } } }
     });
+
+    // Otorgar XP por comentar
+    if (esPrimerComentario) {
+      await otorgarXP(Number(userId), 'PRIMER_COMENTARIO_LIBRO');
+    } else {
+      await otorgarXP(Number(userId), 'COMENTARIO_ADICIONAL');
+    }
 
     res.json({
       success: true,
