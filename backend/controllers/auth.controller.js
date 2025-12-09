@@ -176,19 +176,30 @@ const resetPassword = async (req, res) => {
     try {
         const { token, newPassword } = req.body;
 
+        console.log('🔑 [RESET PASSWORD] Token recibido:', token);
+        console.log('🔑 [RESET PASSWORD] Longitud del token:', token?.length);
+
         // 1. Buscar el token en Supabase
         const tokenRecord = await prisma.passwordResetToken.findUnique({
             where: { token },
             include: { user: true } // Traer al usuario asociado
         });
 
+        console.log('🔍 [RESET PASSWORD] Token encontrado en BD:', tokenRecord ? 'SÍ' : 'NO');
+        if (tokenRecord) {
+            console.log('📅 [RESET PASSWORD] Expira en:', tokenRecord.expiresAt);
+            console.log('⏰ [RESET PASSWORD] Hora actual:', new Date());
+        }
+
         // 2. Validaciones
         if (!tokenRecord) {
+            console.log('❌ [RESET PASSWORD] Token no encontrado en BD');
             return res.status(400).json({ success: false, message: "Token inválido o expirado" });
         }
 
         // Verificar fecha
         if (tokenRecord.expiresAt < new Date()) {
+            console.log('❌ [RESET PASSWORD] Token expirado');
             return res.status(400).json({ success: false, message: "El token ha expirado. Pide uno nuevo." });
         }
 
@@ -204,14 +215,14 @@ const resetPassword = async (req, res) => {
         // 5. Borrar el token usado (Para que no se use dos veces)
         await prisma.passwordResetToken.delete({ where: { id: tokenRecord.id } });
 
+        console.log('✅ [RESET PASSWORD] Contraseña actualizada para usuario:', tokenRecord.user.username);
         res.json({ success: true, message: "Contraseña actualizada correctamente" });
 
     } catch (error) {
-        console.error(error);
+        console.error('❌ [RESET PASSWORD] Error:', error);
         res.status(500).json({ success: false, message: "Error al cambiar contraseña" });
     }
 };
-
 
 
 module.exports = {

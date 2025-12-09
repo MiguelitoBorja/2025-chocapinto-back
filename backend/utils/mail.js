@@ -5,10 +5,10 @@ const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransport({
   host: 'smtp.sendgrid.net',
   port: 587,
-  secure: false, // true for 465, false for other ports
+  secure: false,
   auth: {
-    user: 'apikey', // Este literal "apikey" es correcto
-    pass: process.env.SENDGRID_API_KEY, // Tu API key de SendGrid
+    user: 'apikey', // Este literal "apikey" es correcto para SendGrid
+    pass: process.env.SENDGRID_API_KEY,
   },
 });
 
@@ -33,7 +33,7 @@ if (!process.env.SENDGRID_API_KEY || !process.env.EMAIL_USER) {
 async function sendPasswordResetEmail(to, resetLink) {
   try {
     const mailOptions = {
-      from: `"Booksy 📚" <${process.env.EMAIL_USER}>`, // Debe ser un email verificado en SendGrid
+      from: `"Booksy 📚" <${process.env.EMAIL_USER}>`,
       to: to,
       subject: '🔐 Recuperación de contraseña - Booksy',
       html: `
