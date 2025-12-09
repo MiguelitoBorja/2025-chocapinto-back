@@ -388,6 +388,16 @@ async function confirmarAsistencia(req, res) {
       });
     }
 
+    // Verificar si ya existía una confirmación previa
+    const confirmacionPrevia = await prisma.confirmacionAsistencia.findUnique({
+      where: {
+        sesionId_userId: {
+          sesionId: parseInt(sesionId),
+          userId: user.id
+        }
+      }
+    });
+
     // Crear o actualizar confirmación
     const confirmacion = await prisma.confirmacionAsistencia.upsert({
       where: {
@@ -415,8 +425,11 @@ async function confirmarAsistencia(req, res) {
       }
     });
 
-    // Otorgar XP solo si confirma que asistirá
-    if (estado === 'ASISTIRE') {
+    // Otorgar XP solo si:
+    // 1. Confirma que asistirá (estado === 'ASISTIRE')
+    // 2. Es la primera vez que confirma (no existía confirmación previa)
+    //    O cambió de otro estado a ASISTIRE
+    if (estado === 'ASISTIRE' && (!confirmacionPrevia || confirmacionPrevia.estado !== 'ASISTIRE')) {
       await otorgarXP(user.id, 'CONFIRMAR_ASISTENCIA');
     }
 
@@ -484,6 +497,14 @@ async function registrarAsistenciaReal(req, res) {
       });
     }
 
+    // Verificar si ya se había registrado asistencia previamente (para XP)
+    const asistenciasPrevias = await prisma.asistenciaReal.findMany({
+      where: { sesionId: parseInt(sesionId) },
+      select: { userId: true }
+    });
+    
+    const usuariosPrevios = new Set(asistenciasPrevias.map(a => a.userId));
+
     // Limpiar asistencias previas
     await prisma.asistenciaReal.deleteMany({
       where: { sesionId: parseInt(sesionId) }
@@ -510,9 +531,11 @@ async function registrarAsistenciaReal(req, res) {
       )
     );
 
-    // Otorgar XP a todos los asistentes
+    // Otorgar XP solo a los asistentes que NO estaban en la lista previa
     for (const asistencia of asistencias) {
-      await otorgarXP(asistencia.userId, 'ASISTIR_SESION');
+      if (!usuariosPrevios.has(asistencia.userId)) {
+        await otorgarXP(asistencia.userId, 'ASISTIR_SESION');
+      }
     }
 
     // Actualizar estado de la sesión a COMPLETADA

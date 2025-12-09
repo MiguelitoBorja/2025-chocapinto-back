@@ -418,7 +418,19 @@ const votar = async (req, res) => {
             });
         }
 
-        // 6. Eliminar cualquier voto previo del usuario en este período
+        // 6. Verificar si el usuario ya había votado en este período (para XP)
+        const votosPrevios = await prisma.voto.findMany({
+            where: {
+                userId: user.id,
+                opcion: {
+                    periodoId: periodoId
+                }
+            }
+        });
+        
+        const yaHabiaVotado = votosPrevios.length > 0;
+
+        // 7. Eliminar cualquier voto previo del usuario en este período
         await prisma.voto.deleteMany({
             where: {
                 userId: user.id,
@@ -428,7 +440,7 @@ const votar = async (req, res) => {
             }
         });
 
-        // 7. Registrar el nuevo voto
+        // 8. Registrar el nuevo voto
         const nuevoVoto = await prisma.voto.create({
             data: {
                 opcionId: parseInt(opcionId),
@@ -449,8 +461,10 @@ const votar = async (req, res) => {
 
         console.log(`✅ Voto registrado: ${user.username} → ${nuevoVoto.opcion.clubBook.book.title}`);
 
-        // Otorgar XP por votar
-        await otorgarXP(user.id, 'VOTAR');
+        // Otorgar XP solo si es la primera vez que vota en este período
+        if (!yaHabiaVotado) {
+            await otorgarXP(user.id, 'VOTAR');
+        }
 
         return res.json({
             success: true,
