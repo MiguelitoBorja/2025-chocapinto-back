@@ -1,14 +1,26 @@
 // backend/utils/mail.js
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 
-// Inicializar Resend con tu API key desde variables de entorno
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Configurar el transporter con Gmail
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER, // Tu Gmail (ej: booksy.clubes@gmail.com)
+    pass: process.env.EMAIL_PASS, // App Password de Google
+  },
+});
 
 // Verificar configuración al iniciar
-if (!process.env.RESEND_API_KEY) {
-  console.error("❌ Error: RESEND_API_KEY no está configurada");
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  console.error("❌ Error: EMAIL_USER o EMAIL_PASS no están configuradas");
 } else {
-  console.log("✅ Resend configurado correctamente");
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error("❌ Error verificando configuración de email:", error);
+    } else {
+      console.log("✅ Servidor de email configurado correctamente");
+    }
+  });
 }
 
 /**
@@ -18,8 +30,8 @@ if (!process.env.RESEND_API_KEY) {
  */
 async function sendPasswordResetEmail(to, resetLink) {
   try {
-    const { data, error } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+    const mailOptions = {
+      from: `"Booksy 📚" <${process.env.EMAIL_USER}>`,
       to: to,
       subject: '🔐 Recuperación de contraseña - Booksy',
       html: `
@@ -123,15 +135,11 @@ async function sendPasswordResetEmail(to, resetLink) {
         </body>
         </html>
       `,
-    });
+    };
 
-    if (error) {
-      console.error('❌ Error enviando email con Resend:', error);
-      throw error;
-    }
-
-    console.log(`📧 Mail de recuperación enviado a ${to} (ID: ${data.id})`);
-    return data;
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`📧 Mail de recuperación enviado a ${to} (ID: ${info.messageId})`);
+    return info;
   } catch (error) {
     console.error('❌ Error al enviar mail:', error);
     throw error;
