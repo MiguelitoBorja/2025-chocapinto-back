@@ -124,7 +124,7 @@ const deleteCategoria = async (req, res) => {
     });
 
     if (booksUsingCategory.length > 0) {
-      console.log(`Desconectando categoría "${categoria.nombre}" de ${booksUsingCategory.length} libros`);
+      
       
       // Desconectar la categoría de todos los libros que la usan
       for (const book of booksUsingCategory) {
