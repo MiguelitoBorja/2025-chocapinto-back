@@ -400,7 +400,66 @@ const removeMember = async (req, res) => {
   }
 };
 
-
+// Función de debug para ver usuarios con roles
+const debugUsersWithRoles = async (req, res) => {
+  try {
+    const { clubId } = req.params;
+    
+    console.log('\n🔍 =========================');
+    console.log('🔍 DEBUG USERS WITH ROLES');
+    console.log('🔍 =========================');
+    
+    // Obtener todos los miembros del club directamente desde ClubMember
+    const clubMembers = await prisma.clubMember.findMany({
+      where: { clubId: parseInt(clubId) },
+      include: {
+        user: true,
+        club: true
+      }
+    });
+    
+    console.log(`\n📋 Club ID: ${clubId}`);
+    console.log(`📋 Total members found: ${clubMembers.length}\n`);
+    
+    clubMembers.forEach((membership, index) => {
+      console.log(`${index + 1}. User: ${membership.user.username} (ID: ${membership.user.id})`);
+      console.log(`   Role: ${membership.role}`);
+      console.log(`   Joined: ${membership.joinedAt}`);
+      console.log(`   ----------------`);
+    });
+    
+    // También obtener info del club
+    const club = await prisma.club.findUnique({
+      where: { id: parseInt(clubId) }
+    });
+    
+    
+    
+    res.json({
+      success: true,
+      clubId: parseInt(clubId),
+      totalMembers: clubMembers.length,
+      members: clubMembers.map(membership => ({
+        userId: membership.user.id,
+        username: membership.user.username,
+        role: membership.role,
+        joinedAt: membership.joinedAt
+      })),
+      clubInfo: club ? {
+        name: club.name,
+        legacyOwnerId: club.id_owner
+      } : null
+    });
+    
+  } catch (error) {
+    console.error('❌ Error al obtener usuarios con roles:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Error al obtener usuarios con roles",
+      error: error.message 
+    });
+  }
+};
 
 // Cambiar rol de un miembro del club
 const changeUserRole = async (req, res) => {

@@ -4,7 +4,7 @@ const { validateRequiredFields } = require('../utils/validateFields');
 const { computeNewXpAndLevel, XP_PER_BOOK_FINISHED } = require('../utils/XPSystem');
 const { crearNotificacion } = require('./notificaciones.controller');
 const { otorgarXP } = require('../utils/XPRewards');
-const { showNotification } = require('../../../2025-chocapinto-front/componentes/notificacion');
+
 
 const addBookToClub = async (req, res) => {
   try {
@@ -260,7 +260,7 @@ const removeBookFromClub = async (req, res) => {
         });
         
       } catch (votacionError) {
-        showNotification("error","Error al eliminar opciones de votación");
+        console.log("Error al eliminar opciones de votación");
 
       }
 
@@ -276,7 +276,7 @@ const removeBookFromClub = async (req, res) => {
         });
         
       } catch (periodoError) {
-        showNotification("error","Error al actualizar períodos de lectura");
+        console.log("Error al actualizar períodos de lectura");
       }
 
       // 3. Eliminar comentarios relacionados con este ClubBook
@@ -288,7 +288,7 @@ const removeBookFromClub = async (req, res) => {
         });
         
       } catch (commentError) {
-        showNotification("error","Error al eliminar comentarios");
+        console.log("Error al eliminar comentarios");
         // Intentar con la tabla comentario si comment no existe
         try {
           await tx.comentario.deleteMany({
@@ -298,7 +298,7 @@ const removeBookFromClub = async (req, res) => {
             }
           });
         } catch (comentarioError) {
-          showNotification("error","Error al eliminar comentarios (tabla comentario)");
+          console.log("Error al eliminar comentarios (tabla comentario)");
         }
       }
 
@@ -312,7 +312,7 @@ const removeBookFromClub = async (req, res) => {
         });
         
       } catch (historyError) {
-        showNotification("error","Error al eliminar historial de lectura");
+        console.log("Error al eliminar historial de lectura");
       }
 
       // 5. Eliminar de ClubBook
@@ -372,7 +372,7 @@ const removeBookFromClub = async (req, res) => {
           });
           
         } catch (bookDeleteError) {
-          showNotification("error","Error al eliminar el libro completamente");
+          console.log("Error al eliminar el libro completamente");
           throw bookDeleteError;
         }
       } else {
