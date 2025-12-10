@@ -1,7 +1,10 @@
-// src/controllers/user.controller.js
 const prisma = require('../db');
 const { validateRequiredFields } = require('../utils/validateFields');
 
+/**
+ * Obtener usuario por ID o username
+ * Ruta: GET /api/users/:idOrUsername
+ */
 const getUserByIdOrUsername = async (req, res) => {
   try {
     const idOrUsername = req.params.idOrUsername;
@@ -19,11 +22,15 @@ const getUserByIdOrUsername = async (req, res) => {
 
     res.json({ success: true, user });
   } catch (error) {
-    console.error("Error al obtener usuario:", error);
+    console.error("[ERROR] Error al obtener usuario:", error);
     res.status(500).json({ success: false, message: "Error del servidor" });
   }
 };
 
+/**
+ * Actualizar usuario
+ * Ruta: PUT /api/users
+ */
 const updateUser = async (req, res) => {
   try {
     const { currentUsername, newUsername, newPassword } = req.body;
@@ -37,7 +44,6 @@ const updateUser = async (req, res) => {
       return res.status(404).json({ success: false, message: "Usuario no encontrado" });
     }
 
-    // Validar que el nuevo username no esté en uso
     if (newUsername && newUsername !== currentUsername) {
       const exists = await prisma.user.findUnique({ where: { username: newUsername } });
       if (exists) {
@@ -56,11 +62,15 @@ const updateUser = async (req, res) => {
 
     res.json({ success: true, message: "Usuario actualizado", user: updatedUser });
   } catch (error) {
-    console.error("Error al actualizar usuario:", error);
+    console.error("[ERROR] Error al actualizar usuario:", error);
     res.status(500).json({ success: false, message: "Error del servidor" });
   }
 };
 
+/**
+ * Eliminar usuario
+ * Ruta: DELETE /api/users
+ */
 const deleteUser = async (req, res) => {
   try {
     const { username } = req.body;
@@ -77,21 +87,23 @@ const deleteUser = async (req, res) => {
     await prisma.user.delete({ where: { username } });
     res.json({ success: true, message: "Usuario eliminado" });
   } catch (error) {
-    console.error("Error al eliminar usuario:", error);
+    console.error("[ERROR] Error al eliminar usuario:", error);
     res.status(500).json({ success: false, message: "Error al eliminar usuario" });
   }
 };
+
+/**
+ * Obtener clubes del usuario
+ * Ruta: GET /api/users/:username/clubs
+ */
 const getMyClubs = async (req, res) => {
     const { username } = req.params;
 
     try {
-        // 1. Encontrar el usuario e incluir la relación
-        // CAMBIO CLAVE: Usamos 'memberships' en lugar de 'clubMembers'
         const userWithClubs = await prisma.user.findUnique({
             where: { username: username },
             select: {
                 id: true,
-                // ¡CORRECCIÓN AQUÍ! Se usa el nombre de relación correcto
                 memberships: { 
                     select: {
                         role: true,
@@ -114,8 +126,6 @@ const getMyClubs = async (req, res) => {
             return res.status(404).json({ success: false, message: "Usuario no encontrado." });
         }
         
-        // 2. Formatear la respuesta
-        // userWithClubs.memberships contiene el array de membresías
         const clubsData = userWithClubs.memberships.map(membership => ({
             id: membership.club.id,
             name: membership.club.name,
@@ -127,16 +137,20 @@ const getMyClubs = async (req, res) => {
         res.json({ success: true, clubs: clubsData });
 
     } catch (error) {
-        console.error("Error al obtener los clubes del usuario:", error);
+        console.error("[ERROR] Error al obtener los clubes del usuario:", error);
         res.status(500).json({ success: false, message: "Error interno del servidor al consultar clubes." });
     }
 };
+
+/**
+ * Actualizar selección de avatar del usuario
+ * Ruta: PUT /api/users/:userId/avatar
+ */
 const updateAvatarSelection = async (req, res) => {
     const { userId } = req.params;
     const { avatarName } = req.body; 
 
     try {
-        // Validar que el userId sea válido
         if (!userId || isNaN(parseInt(userId))) {
             return res.status(400).json({ 
                 success: false, 
@@ -144,7 +158,6 @@ const updateAvatarSelection = async (req, res) => {
             });
         }
 
-        // Validar que el avatarName sea válido
         if (!avatarName || typeof avatarName !== 'string') {
             return res.status(400).json({ 
                 success: false, 
@@ -152,10 +165,8 @@ const updateAvatarSelection = async (req, res) => {
             });
         }
 
-        // Construir la ruta del avatar
         const avatarPath = `../images/avatars/${avatarName}`;
 
-        // Verificar que el usuario exista antes de actualizar
         const existingUser = await prisma.user.findUnique({
             where: { id: parseInt(userId) }
         });
@@ -167,7 +178,6 @@ const updateAvatarSelection = async (req, res) => {
             });
         }
 
-        // Actualizar el avatar del usuario
         const updatedUser = await prisma.user.update({
             where: { id: parseInt(userId) },
             data: { avatar: avatarPath },
@@ -186,7 +196,7 @@ const updateAvatarSelection = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Error actualizando avatar:", error);
+        console.error("[ERROR] Error actualizando avatar:", error);
         res.status(500).json({ 
             success: false, 
             message: "Error del servidor al actualizar el avatar" 
