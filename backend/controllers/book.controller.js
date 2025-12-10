@@ -1,7 +1,7 @@
 // src/controllers/book.controller.js
 const prisma = require('../db');
 const { validateRequiredFields } = require('../utils/validateFields');
-const { computeNewXpAndLevel, XP_PER_BOOK_FINISHED } = require('../utils/XPSystem');
+const { computeNewXpAndLevel, XP_REWARDS } = require('../utils/XPRewards');
 const { crearNotificacion } = require('./notificaciones.controller');
 const { otorgarXP } = require('../utils/XPRewards');
 
@@ -393,19 +393,19 @@ const changeBookStatus = async (req, res) => {
       await prisma.$transaction(
         miembros.map(miembro => {
           const oldLevel = miembro.user.level || 1;
-          const { xp, level } = computeNewXpAndLevel(miembro.user, XP_PER_BOOK_FINISHED);
+          const { xp, level } = computeNewXpAndLevel(miembro.user, XP_REWARDS.COMPLETAR_LIBRO);
           
           if (level > oldLevel) {
             crearNotificacion(
               miembro.userId,
               'NIVEL_SUBIDO',
               '🎉 ¡Subiste de nivel!',
-              `¡Felicidades! Ahora eres nivel ${level}. Ganaste ${XP_PER_BOOK_FINISHED} XP por completar un libro.`,
+              `¡Felicidades! Ahora eres nivel ${level}. Ganaste ${XP_REWARDS.COMPLETAR_LIBRO} XP por completar un libro.`,
               { 
                 oldLevel, 
                 newLevel: level, 
                 xp,
-                xpGanado: XP_PER_BOOK_FINISHED
+                xpGanado: XP_REWARDS.COMPLETAR_LIBRO
               }
             ).catch(err => console.error('[ERROR] Error al notificar nivel subido:', err));
           }
