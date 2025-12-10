@@ -18,7 +18,7 @@ const crearNotificacion = async (userId, tipo, titulo, mensaje, datos = null) =>
     });
     return notificacion;
   } catch (error) {
-    console.error('Error al crear notificación:', error);
+    console.error('[ERROR] Error al crear notificación:', error);
     throw error;
   }
 };
@@ -28,9 +28,8 @@ const crearNotificacion = async (userId, tipo, titulo, mensaje, datos = null) =>
  */
 const crearNotificacionesMasivas = async (userIds, tipo, titulo, mensaje, datos = null) => {
   try {
-    // Validar parámetros requeridos
     if (!tipo || !titulo || !mensaje) {
-      console.error('❌ Parámetros faltantes en crearNotificacionesMasivas:', { tipo, titulo, mensaje });
+      console.error('[ERROR] Parámetros faltantes en crearNotificacionesMasivas:', { tipo, titulo, mensaje });
       throw new Error('Los parámetros tipo, titulo y mensaje son requeridos');
     }
 
@@ -46,23 +45,22 @@ const crearNotificacionesMasivas = async (userIds, tipo, titulo, mensaje, datos 
     });
     return notificaciones;
   } catch (error) {
-    console.error('Error al crear notificaciones masivas:', error);
+    console.error('[ERROR] Error al crear notificaciones masivas:', error);
     throw error;
   }
 };
 
 /**
- * Obtener todas las notificaciones de un usuario
- * GET /api/notificaciones/:userId
+ * Obtiene todas las notificaciones de un usuario
+ * Ruta: GET /api/notificaciones/:userId
  */
 const obtenerNotificacionesUsuario = async (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
-    const { leidas } = req.query; // ?leidas=true/false para filtrar
+    const { leidas } = req.query;
 
     const where = { userId };
     
-    // Filtrar por estado de lectura si se especifica
     if (leidas !== undefined) {
       where.leida = leidas === 'true';
     }
@@ -70,10 +68,9 @@ const obtenerNotificacionesUsuario = async (req, res) => {
     const notificaciones = await prisma.notificacion.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 50 // Limitar a las últimas 50 notificaciones
+      take: 50
     });
 
-    // Parsear los datos JSON
     const notificacionesFormateadas = notificaciones.map(notif => ({
       ...notif,
       datos: notif.datos ? JSON.parse(notif.datos) : null
@@ -85,7 +82,7 @@ const obtenerNotificacionesUsuario = async (req, res) => {
       total: notificaciones.length
     });
   } catch (error) {
-    console.error('Error al obtener notificaciones:', error);
+    console.error('[ERROR] Error al obtener notificaciones:', error);
     res.status(500).json({
       success: false,
       message: 'Error al obtener notificaciones'
@@ -94,8 +91,8 @@ const obtenerNotificacionesUsuario = async (req, res) => {
 };
 
 /**
- * Obtener cantidad de notificaciones no leídas
- * GET /api/notificaciones/:userId/no-leidas/count
+ * Cuenta notificaciones no leídas de un usuario
+ * Ruta: GET /api/notificaciones/:userId/no-leidas/count
  */
 const contarNotificacionesNoLeidas = async (req, res) => {
   try {
@@ -113,7 +110,7 @@ const contarNotificacionesNoLeidas = async (req, res) => {
       count
     });
   } catch (error) {
-    console.error('Error al contar notificaciones no leídas:', error);
+    console.error('[ERROR] Error al contar notificaciones no leídas:', error);
     res.status(500).json({
       success: false,
       message: 'Error al contar notificaciones'
@@ -122,8 +119,8 @@ const contarNotificacionesNoLeidas = async (req, res) => {
 };
 
 /**
- * Marcar una notificación como leída
- * PUT /api/notificaciones/:notificacionId/leer
+ * Marca una notificación como leída
+ * Ruta: PUT /api/notificaciones/:notificacionId/leer
  */
 const marcarComoLeida = async (req, res) => {
   try {
@@ -140,7 +137,7 @@ const marcarComoLeida = async (req, res) => {
       notificacion
     });
   } catch (error) {
-    console.error('Error al marcar notificación como leída:', error);
+    console.error('[ERROR] Error al marcar notificación como leída:', error);
     res.status(500).json({
       success: false,
       message: 'Error al actualizar notificación'
@@ -149,8 +146,8 @@ const marcarComoLeida = async (req, res) => {
 };
 
 /**
- * Marcar todas las notificaciones de un usuario como leídas
- * PUT /api/notificaciones/:userId/leer-todas
+ * Marca todas las notificaciones de un usuario como leídas
+ * Ruta: PUT /api/notificaciones/:userId/leer-todas
  */
 const marcarTodasComoLeidas = async (req, res) => {
   try {
@@ -170,7 +167,7 @@ const marcarTodasComoLeidas = async (req, res) => {
       count: resultado.count
     });
   } catch (error) {
-    console.error('Error al marcar todas como leídas:', error);
+    console.error('[ERROR] Error al marcar todas como leídas:', error);
     res.status(500).json({
       success: false,
       message: 'Error al actualizar notificaciones'
@@ -179,8 +176,8 @@ const marcarTodasComoLeidas = async (req, res) => {
 };
 
 /**
- * Eliminar una notificación
- * DELETE /api/notificaciones/:notificacionId
+ * Elimina una notificación
+ * Ruta: DELETE /api/notificaciones/:notificacionId
  */
 const eliminarNotificacion = async (req, res) => {
   try {
@@ -195,7 +192,7 @@ const eliminarNotificacion = async (req, res) => {
       message: 'Notificación eliminada'
     });
   } catch (error) {
-    console.error('Error al eliminar notificación:', error);
+    console.error('[ERROR] Error al eliminar notificación:', error);
     res.status(500).json({
       success: false,
       message: 'Error al eliminar notificación'
@@ -204,8 +201,8 @@ const eliminarNotificacion = async (req, res) => {
 };
 
 /**
- * Eliminar todas las notificaciones leídas de un usuario
- * DELETE /api/notificaciones/:userId/limpiar
+ * Elimina todas las notificaciones leídas de un usuario
+ * Ruta: DELETE /api/notificaciones/:userId/limpiar
  */
 const limpiarNotificacionesLeidas = async (req, res) => {
   try {
@@ -224,7 +221,7 @@ const limpiarNotificacionesLeidas = async (req, res) => {
       count: resultado.count
     });
   } catch (error) {
-    console.error('Error al limpiar notificaciones:', error);
+    console.error('[ERROR] Error al limpiar notificaciones:', error);
     res.status(500).json({
       success: false,
       message: 'Error al limpiar notificaciones'
@@ -233,40 +230,31 @@ const limpiarNotificacionesLeidas = async (req, res) => {
 };
 
 /**
- * Notificar a todos los miembros de un club
+ * Notifica a todos los miembros de un club
  */
 const notificarMiembrosClub = async (clubId, tipo, titulo, mensaje, datos = null, excluirUsuarioId = null) => {
   try {
-    console.log('📨 notificarMiembrosClub llamada con:', { clubId, tipo, titulo, mensaje, excluirUsuarioId });
-    
-    // Obtener todos los miembros del club
     const miembros = await prisma.clubMember.findMany({
       where: { clubId },
       select: { userId: true }
     });
 
-    // Filtrar el usuario excluido si existe (por ejemplo, el creador de la sesión)
     let userIds = miembros.map(m => m.userId);
     if (excluirUsuarioId) {
       userIds = userIds.filter(id => id !== excluirUsuarioId);
     }
 
     if (userIds.length === 0) {
-      console.log('⚠️ No hay usuarios para notificar');
       return { count: 0 };
     }
 
-    // Agregar clubId a los datos
     const datosConClub = { ...datos, clubId };
-
-    console.log(`✅ Creando notificaciones para ${userIds.length} usuarios`);
     
-    // Crear notificaciones para todos
     await crearNotificacionesMasivas(userIds, tipo, titulo, mensaje, datosConClub);
 
     return { count: userIds.length };
   } catch (error) {
-    console.error('Error al notificar miembros del club:', error);
+    console.error('[ERROR] Error al notificar miembros del club:', error);
     throw error;
   }
 };
