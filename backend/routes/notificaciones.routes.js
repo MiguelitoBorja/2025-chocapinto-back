@@ -10,7 +10,7 @@ const {
   limpiarNotificacionesLeidas
 } = require('../controllers/notificaciones.controller');
 
-// IMPORTANTE: Las rutas más específicas deben ir primero
+
 
 // Contar notificaciones no leídas
 // GET /api/notificaciones/:userId/no-leidas/count

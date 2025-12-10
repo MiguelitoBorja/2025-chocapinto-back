@@ -1,29 +1,24 @@
-// utils/XPRewards.js
+/**
+ * Utilidad: XP Rewards System
+ * Sistema de recompensas de experiencia para acciones del usuario.
+ */
+
 const prisma = require('../db');
 const { computeNewXpAndLevel } = require('./XPSystem');
 const { crearNotificacion } = require('../controllers/notificaciones.controller');
 
 const XP_REWARDS = {
-  // Lectura
   COMPLETAR_LIBRO: 100,
   VOTAR: 10,
   PRIMER_COMENTARIO_LIBRO: 20,
   COMENTARIO_ADICIONAL: 5,
-  
-  // Club
   CREAR_CLUB: 50,
   UNIRSE_CLUB: 15,
   AGREGAR_LIBRO: 10,
   CREAR_VOTACION: 20,
-  
-  // Sesiones
   CONFIRMAR_ASISTENCIA: 5,
   ASISTIR_SESION: 25,
-  ORGANIZAR_SESION: 30,
-  
-  // Milestones (futuro)
-  MILESTONE_5_LIBROS: 200,
-  MILESTONE_10_LIBROS: 500,
+  ORGANIZAR_SESION: 30
 };
 
 /**
@@ -38,28 +33,24 @@ async function otorgarXP(userId, tipoAccion, cantidad = null) {
     const xpGanado = cantidad || XP_REWARDS[tipoAccion] || 0;
     
     if (xpGanado === 0) {
-      console.warn(`⚠️ No hay XP definido para: ${tipoAccion}`);
       return { levelUp: false, xpGanado: 0 };
     }
 
-    // Obtener usuario actual
     const usuario = await prisma.user.findUnique({
       where: { id: userId },
       select: { xp: true, level: true, username: true }
     });
 
     if (!usuario) {
-      console.error(`❌ Usuario ${userId} no encontrado`);
+      console.error(`[ERROR] Usuario ${userId} no encontrado`);
       return { levelUp: false, xpGanado: 0 };
     }
 
     const oldLevel = usuario.level || 1;
     const oldXp = usuario.xp || 0;
     
-    // Computar nuevo XP y nivel
     const { xp: newXp, level: newLevel } = computeNewXpAndLevel(usuario, xpGanado);
 
-    // Actualizar XP y nivel
     await prisma.user.update({
       where: { id: userId },
       data: {
@@ -68,9 +59,6 @@ async function otorgarXP(userId, tipoAccion, cantidad = null) {
       }
     });
 
-    console.log(`✨ ${usuario.username} ganó ${xpGanado} XP por ${tipoAccion} (${oldXp} → ${newXp} XP)`);
-
-    // Si subió de nivel, enviar notificación
     if (newLevel > oldLevel) {
       const accionLegible = tipoAccion.toLowerCase().replace(/_/g, ' ');
       
@@ -86,9 +74,7 @@ async function otorgarXP(userId, tipoAccion, cantidad = null) {
           xpTotal: newXp,
           accion: tipoAccion 
         }
-      ).catch(err => console.error('Error al notificar nivel subido:', err));
-      
-      console.log(`🎉 ${usuario.username} subió de nivel ${oldLevel} → ${newLevel}!`);
+      ).catch(err => console.error('[ERROR] Error al notificar nivel subido:', err));
     }
 
     return {
@@ -100,13 +86,15 @@ async function otorgarXP(userId, tipoAccion, cantidad = null) {
     };
 
   } catch (error) {
-    console.error(`❌ Error al otorgar XP (${tipoAccion}):`, error);
+    console.error(`[ERROR] Error al otorgar XP (${tipoAccion}):`, error);
     return { levelUp: false, xpGanado: 0, error: error.message };
   }
 }
 
 /**
- * Obtiene un mensaje descriptivo según el tipo de acción
+ * Obtiene un mensaje descriptivo según el tipo de acción.
+ * @param {string} tipoAccion - Tipo de acción del sistema de XP
+ * @returns {string} Descripción legible de la acción
  */
 function getAccionDescripcion(tipoAccion) {
   const descripciones = {

@@ -1,14 +1,14 @@
-// backend/utils/mail.js
+/**
+ * Utilidad: Mail Service
+ * Servicio de envío de correos electrónicos usando SendGrid.
+ */
+
 const sgMail = require('@sendgrid/mail');
 
-// Configurar SendGrid con la API Key
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-// Verificar configuración al iniciar
 if (!process.env.SENDGRID_API_KEY || !process.env.EMAIL_USER) {
-  console.error("❌ Error: SENDGRID_API_KEY o EMAIL_USER no están configuradas");
-} else {
-  console.log("✅ SendGrid configurado correctamente");
+  console.error("[ERROR] SENDGRID_API_KEY o EMAIL_USER no están configuradas");
 }
 
 /**
@@ -126,11 +126,10 @@ async function sendPasswordResetEmail(to, resetLink) {
     };
 
     await sgMail.send(msg);
-    console.log(`📧 Mail de recuperación enviado a ${to}`);
   } catch (error) {
-    console.error('❌ Error al enviar mail:', error);
+    console.error('[ERROR] Error al enviar mail:', error);
     if (error.response) {
-      console.error('Detalles del error:', error.response.body);
+      console.error('[ERROR] Detalles del error:', error.response.body);
     }
     throw error;
   }
