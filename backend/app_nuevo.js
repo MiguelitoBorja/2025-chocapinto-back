@@ -13,6 +13,7 @@ const periodoRoutes = require('./routes/periodo.routes');
 const sesionRoutes = require('./routes/sesion.routes');
 const notificacionesRoutes = require('./routes/notificaciones.routes');
 const scheduledRoutes = require('./routes/scheduled.routes');
+const rankingGlobalRoutes = require('./routes/ranking.global.routes');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api', periodoRoutes);
 app.use('/api/sesiones', sesionRoutes);
 app.use('/api/notificaciones', notificacionesRoutes);
 app.use('/api/scheduled', scheduledRoutes);
+app.use('/', rankingGlobalRoutes);
 
 
 // Mantener rutas legacy para compatibilidad
