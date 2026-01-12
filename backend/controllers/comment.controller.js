@@ -265,7 +265,13 @@ const deleteComment = async (req, res) => {
     if (!comentario) {
       return res.status(404).json({ success: false, message: "Comentario no encontrado" });
     }
-
+    // ✅ VALIDACIÓN: Solo el autor o un admin puede eliminar
+    if (comentario.userId !== req.user.userId && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'No puedes eliminar comentarios de otros usuarios' 
+      });
+    }
     await prisma.comment.delete({ where: { id: comentarioId } });
     
     res.json({ success: true, message: "Comentario eliminado" });
