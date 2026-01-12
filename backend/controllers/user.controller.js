@@ -39,6 +39,14 @@ const updateUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "No se proporcionó el usuario actual" });
     }
 
+    // ✅ VALIDACIÓN: Solo puede modificar su propio usuario
+    if (req.user.username !== currentUsername && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'No puedes modificar datos de otro usuario' 
+      });
+    }
+
     const user = await prisma.user.findUnique({ where: { username: currentUsername } });
     if (!user) {
       return res.status(404).json({ success: false, message: "Usuario no encontrado" });
@@ -79,6 +87,14 @@ const deleteUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "Falta el nombre de usuario" });
     }
 
+    // ✅ VALIDACIÓN: Solo puede eliminar su propio usuario
+    if (req.user.username !== username && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'No puedes eliminar a otro usuario' 
+      });
+    }
+
     const user = await prisma.user.findUnique({ where: { username } });
     if (!user) {
       return res.status(404).json({ success: false, message: "Usuario no encontrado" });
@@ -100,6 +116,14 @@ const getMyClubs = async (req, res) => {
     const { username } = req.params;
 
     try {
+        // ✅ VALIDACIÓN: Solo puede ver sus propios clubes (o admin puede ver todos)
+        if (req.user.username !== username && req.user.role !== 'admin') {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'No puedes ver los clubes de otro usuario' 
+            });
+        }
+
         const userWithClubs = await prisma.user.findUnique({
             where: { username: username },
             select: {
@@ -147,59 +171,46 @@ const getMyClubs = async (req, res) => {
  * Ruta: PUT /api/users/:userId/avatar
  */
 const updateAvatarSelection = async (req, res) => {
-    const { userId } = req.params;
-    const { avatarName } = req.body; 
-
     try {
-        if (!userId || isNaN(parseInt(userId))) {
-            return res.status(400).json({ 
+        const userId = parseInt(req.params.userId, 10);
+        const { avatar } = req.body;
+
+        // ✅ VALIDACIÓN: Solo puede cambiar su propio avatar
+        if (req.user.userId !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({ 
                 success: false, 
-                message: "ID de usuario no válido" 
+                message: 'No puedes cambiar el avatar de otro usuario' 
             });
         }
 
-        if (!avatarName || typeof avatarName !== 'string') {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Nombre de avatar no válido" 
-            });
-        }
-
-        const avatarPath = `../images/avatars/${avatarName}`;
-
-        const existingUser = await prisma.user.findUnique({
-            where: { id: parseInt(userId) }
-        });
-
-        if (!existingUser) {
-            return res.status(404).json({ 
-                success: false, 
-                message: "Usuario no encontrado" 
+        if (!avatar) {
+            return res.status(400).json({
+                success: false,
+                message: "Falta el avatar a seleccionar"
             });
         }
 
         const updatedUser = await prisma.user.update({
-            where: { id: parseInt(userId) },
-            data: { avatar: avatarPath },
-            select: { 
-                id: true, 
-                username: true, 
-                avatar: true 
+            where: { id: userId },
+            data: { avatar },
+            select: {
+                id: true,
+                username: true,
+                avatar: true
             }
         });
 
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             message: "Avatar actualizado correctamente",
-            avatar: avatarPath,
-            user: updatedUser 
+            user: updatedUser
         });
 
     } catch (error) {
-        console.error("[ERROR] Error actualizando avatar:", error);
-        res.status(500).json({ 
-            success: false, 
-            message: "Error del servidor al actualizar el avatar" 
+        console.error("[ERROR] Error al actualizar avatar:", error);
+        res.status(500).json({
+            success: false,
+            message: "Error del servidor al actualizar el avatar"
         });
     }
 };

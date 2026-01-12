@@ -18,8 +18,11 @@ const createClub = async (req, res) => {
     if (missingFields) {
       return res.status(400).json({ success: false, message: "Faltan datos requeridos" });
     }
+    
 
-    const owner = await prisma.user.findUnique({ where: { username: ownerUsername } });
+    const owner = await prisma.user.findUnique({ 
+      where: { username: req.user.username } 
+    });
     if (!owner) {
       return res.status(404).json({ success: false, message: "Usuario no encontrado" });
     }
@@ -77,6 +80,21 @@ const deleteClub = async (req, res) => {
     const clubId = Number(req.params.id);
     if (!clubId) {
       return res.status(400).json({ success: false, message: "ID inválido" });
+    }
+     const club = await prisma.club.findUnique({
+      where: { id: clubId }
+    });
+
+    if (!club) {
+      return res.status(404).json({ success: false, message: "Club no encontrado" });
+    }
+
+    // ✅ VALIDACIÓN: Solo el dueño o un admin pueden eliminar
+    if (club.id_owner !== req.user.userId && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Solo el dueño del club puede eliminarlo' 
+      });
     }
 
     await prisma.$transaction(async (tx) => {
