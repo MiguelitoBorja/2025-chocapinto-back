@@ -14,6 +14,6 @@ router.delete('/deleteClub/:id', authenticateUser, authorizeRoles('admin', 'mode
 router.post('/clubSolicitud', authenticateUser, clubController.joinClub);
 router.put('/club/:clubId/solicitud/:solicitudId', authenticateUser, clubController.manageMembershipRequest);
 router.delete('/club/:clubId/removeMember/:userId', authenticateUser, clubController.removeMember);
-router.put('/club/:clubId/change-role/:userId', authenticateUser, authorizeRoles('admin', 'moderator'), clubController.changeUserRole);
+router.put('/club/:clubId/change-role/:userId', authenticateUser, clubController.changeUserRole);
 
 module.exports = router;
