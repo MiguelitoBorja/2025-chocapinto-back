@@ -59,6 +59,14 @@ const obtenerNotificacionesUsuario = async (req, res) => {
     const userId = parseInt(req.params.userId);
     const { leidas } = req.query;
 
+    // Validar que el usuario autenticado solo pueda ver sus propias notificaciones
+    if (req.user.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tienes permiso para ver estas notificaciones'
+      });
+    }
+
     const where = { userId };
     
     if (leidas !== undefined) {
@@ -98,6 +106,14 @@ const contarNotificacionesNoLeidas = async (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
 
+    // Validar que el usuario autenticado solo pueda contar sus propias notificaciones
+    if (req.user.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tienes permiso para acceder a estas notificaciones'
+      });
+    }
+
     const count = await prisma.notificacion.count({
       where: {
         userId,
@@ -126,7 +142,26 @@ const marcarComoLeida = async (req, res) => {
   try {
     const notificacionId = parseInt(req.params.notificacionId);
 
-    const notificacion = await prisma.notificacion.update({
+    // Verificar que la notificación pertenece al usuario autenticado
+    const notificacion = await prisma.notificacion.findUnique({
+      where: { id: notificacionId }
+    });
+
+    if (!notificacion) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notificación no encontrada'
+      });
+    }
+
+    if (notificacion.userId !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tienes permiso para modificar esta notificación'
+      });
+    }
+
+    const notificacionActualizada = await prisma.notificacion.update({
       where: { id: notificacionId },
       data: { leida: true }
     });
@@ -134,7 +169,7 @@ const marcarComoLeida = async (req, res) => {
     res.json({
       success: true,
       message: 'Notificación marcada como leída',
-      notificacion
+      notificacion: notificacionActualizada
     });
   } catch (error) {
     console.error('[ERROR] Error al marcar notificación como leída:', error);
@@ -152,6 +187,14 @@ const marcarComoLeida = async (req, res) => {
 const marcarTodasComoLeidas = async (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
+
+    // Validar que el usuario autenticado solo pueda marcar sus propias notificaciones
+    if (req.user.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tienes permiso para modificar estas notificaciones'
+      });
+    }
 
     const resultado = await prisma.notificacion.updateMany({
       where: {
@@ -183,6 +226,25 @@ const eliminarNotificacion = async (req, res) => {
   try {
     const notificacionId = parseInt(req.params.notificacionId);
 
+    // Verificar que la notificación pertenece al usuario autenticado
+    const notificacion = await prisma.notificacion.findUnique({
+      where: { id: notificacionId }
+    });
+
+    if (!notificacion) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notificación no encontrada'
+      });
+    }
+
+    if (notificacion.userId !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tienes permiso para eliminar esta notificación'
+      });
+    }
+
     await prisma.notificacion.delete({
       where: { id: notificacionId }
     });
@@ -207,6 +269,14 @@ const eliminarNotificacion = async (req, res) => {
 const limpiarNotificacionesLeidas = async (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
+
+    // Validar que el usuario autenticado solo pueda limpiar sus propias notificaciones
+    if (req.user.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No tienes permiso para limpiar estas notificaciones'
+      });
+    }
 
     const resultado = await prisma.notificacion.deleteMany({
       where: {
