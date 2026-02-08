@@ -39,13 +39,20 @@ const getCategorias = async (req, res) => {
   try {
     const { clubId } = req.query;
     console.log(`[INFO] Obteniendo categorías para clubId=${clubId || 'N/A'}`);
+    
     // Asegurar que existen las categorías globales
     for (const nombre of CATEGORIAS_ESTATICAS) {
-      await prisma.categoria.upsert({
-        where: { nombre_clubId: { nombre, clubId: null } },
-        update: {},
-        create: { nombre, clubId: null }
+      // Verificar si ya existe la categoría global
+      const existeGlobal = await prisma.categoria.findFirst({
+        where: { nombre, clubId: null }
       });
+      
+      // Si no existe, crearla
+      if (!existeGlobal) {
+        await prisma.categoria.create({
+          data: { nombre, clubId: null }
+        });
+      }
     }
     
     // Obtener categorías globales + del club específico
