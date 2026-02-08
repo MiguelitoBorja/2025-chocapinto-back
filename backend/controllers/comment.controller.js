@@ -1,6 +1,7 @@
 // src/controllers/comment.controller.js
 const prisma = require('../db');
 const { otorgarXP } = require('../utils/XPRewards');
+const { sanitizeHtml, isContentSafe } = require('../utils/sanitize');
 
 /**
  * Obtiene los comentarios de un libro en un club específico
@@ -122,6 +123,17 @@ const createComment = async (req, res) => {
     if (!clubId || !bookId) {
       return res.status(400).json({ success: false, message: "IDs inválidos" });
     }
+    
+    // Validar que el comentario no contenga scripts maliciosos
+    if (!isContentSafe(commentContent)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "El comentario contiene contenido no permitido" 
+      });
+    }
+    
+    // Sanitizar el contenido del comentario para prevenir XSS
+    const safeContent = sanitizeHtml(commentContent.trim());
 
     const user = await prisma.user.findUnique({ where: { username } });
     if (!user) {
@@ -147,7 +159,7 @@ const createComment = async (req, res) => {
 
     const comment = await prisma.comment.create({
       data: {
-        content: commentContent.trim(),
+        content: safeContent,
         userId: user.id,
         clubBookId: clubBook.id
       },

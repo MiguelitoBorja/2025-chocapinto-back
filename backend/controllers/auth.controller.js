@@ -6,6 +6,7 @@ const { sendPasswordResetEmail } = require("../utils/mail");
 const { hashPassword, comparePassword } = require('../utils/hashPassword');
 const { validateRequiredFields, validateEmail, validatePassword } = require('../utils/validateFields');
 const userAuthService = require('../services/userAuth.service');
+const { sanitizeHtml, isContentSafe } = require('../utils/sanitize');
 
 
 /**
@@ -34,12 +35,23 @@ const register = async (req, res) => {
         message: "La contraseña debe tener al menos 6 caracteres" 
       });
     }
+    
+    // Validar que el username no contenga HTML/scripts
+    if (!isContentSafe(username)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "El nombre de usuario contiene caracteres no permitidos" 
+      });
+    }
+    
+    // Sanitizar username
+    const safeUsername = sanitizeHtml(username);
 
     const hashedPassword = await hashPassword(password);
 
     const user = await prisma.user.create({
       data: { 
-        username, 
+        username: safeUsername, 
         email, 
         password: hashedPassword, 
         role: "reader" 

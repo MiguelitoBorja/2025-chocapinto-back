@@ -3,6 +3,7 @@ const prisma = require('../db');
 const { validateRequiredFields } = require('../utils/validateFields');
 const { crearNotificacion } = require('./notificaciones.controller');
 const { otorgarXP } = require('../utils/XPRewards');
+const { sanitizeHtml, isContentSafe } = require('../utils/sanitize');
 
 const DEFAULT_CLUB_IMAGE = "https://img.lovepik.com/png/20231109/book-cartoon-illustration-school-start-reading-reading-book_539915_wh860.png";
 
@@ -19,6 +20,17 @@ const createClub = async (req, res) => {
       return res.status(400).json({ success: false, message: "Faltan datos requeridos" });
     }
     
+    // Validar que el contenido no tenga scripts maliciosos
+    if (!isContentSafe(name) || !isContentSafe(description)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "El nombre o descripción contiene contenido no permitido" 
+      });
+    }
+    
+    // Sanitizar inputs para prevenir XSS
+    const safeName = sanitizeHtml(name);
+    const safeDescription = sanitizeHtml(description);
 
     const owner = await prisma.user.findUnique({ 
       where: { username: req.user.username } 
@@ -29,8 +41,8 @@ const createClub = async (req, res) => {
 
     const club = await prisma.club.create({
       data: {
-        name,
-        description,
+        name: safeName,
+        description: safeDescription,
         id_owner: owner.id,
         imagen: imagen || DEFAULT_CLUB_IMAGE
       }
