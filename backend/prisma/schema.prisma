@@ -71,6 +71,7 @@ model Club {
   clubCategories ClubCategoria[] @relation("ClubToClubCategoria")
   periodosLectura PeriodoLectura[] // Períodos de lectura del club
   sesionesLectura  SesionLectura[]
+  categorias      Categoria[]      // Categorías personalizadas del club
 }
 
 model Book {
@@ -85,9 +86,14 @@ model Book {
 }
 
 model Categoria {
-  id       Int      @id @default(autoincrement())
-  nombre   String   @unique
-  libros   Book[]   @relation("BookCategorias")
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  clubId    Int?
+  club      Club?    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  libros    Book[]   @relation("BookCategorias")
+  createdAt DateTime @default(now())
+  
+  @@unique([nombre, clubId])
 }
 
 model Comment {
