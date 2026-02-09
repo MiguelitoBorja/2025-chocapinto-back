@@ -92,8 +92,8 @@ app.use('/sesion', sesionRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  
-  console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
+  console.log(`\ud83d\ude80 Servidor corriendo en el puerto ${PORT}`);
+  console.log(`\ud83c\udf10 http://localhost:${PORT}`);
   // Iniciar verificaciones automáticas de notificaciones
   
   iniciarVerificacionesAutomaticas();
